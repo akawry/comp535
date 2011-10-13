@@ -2,6 +2,7 @@
  * udp.c (collection of functions that implement the UDP (User datagram protocol).
  */
 
+#include "protocols.h"
 #include "udp.h"
 #include "ip.h"
 #include <stdlib.h>
@@ -10,20 +11,26 @@
 
 int UDPProcess(gpacket_t *in_pkt)
 {
+	verbose(2, "[UDPProcess]:: packet received for processing");
+
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
 
 	// calculate the checksum 
-	int check_sum = UDPChecksum(in_pkt);
+	int cksum = UDPChecksum(in_pkt);
 
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);	
-	
-	verbose(2, "[UDPProcess]:: packet received for processing.. NOT YET IMPLEMENTED!! ");
-	return EXIT_SUCCESS;
+	if (cksum != udphdr->checksum){
+		// todo	
+	}	
 
+	IPOutgoingPacket(in_pkt, NULL, 0, 0, UDP_PROTOCOL);
+
+	return EXIT_SUCCESS;
 }
+
 
 int UDPChecksum(gpacket_t *in_pkt)
 {
@@ -49,5 +56,5 @@ int UDPChecksum(gpacket_t *in_pkt)
 	// add udp length
 	sum += udp_len;
 
-	return sum;
+	return ~sum;
 }
