@@ -18,6 +18,7 @@ typedef struct _udphdr_t
 
 // function prototypes
 
+int UDPProcess(gpacket_t *in_pkt);
 int UDPChecksum(gpacket_t *in_pkt);
 
 #endif
