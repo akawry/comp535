@@ -3,7 +3,13 @@
  */
 
 #include "udp.h"
-#include "packetcore.h"
+#include "message.h"
 #include <stdlib.h>
 #include <slack/err.h>
 #include <string.h>
+
+int UDPChecksum(gpacket_t *in_pkt)
+{
+	// TODO
+	return 0;
+}
