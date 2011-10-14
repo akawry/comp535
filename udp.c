@@ -5,56 +5,72 @@
 #include "protocols.h"
 #include "udp.h"
 #include "ip.h"
+#include <inttypes.h>
 #include <stdlib.h>
+#include <netinet/in.h>
 #include <slack/err.h>
 #include <string.h>
 
+
+
+uint32_t wordsum(uchar* buff, int words){
+	uint16_t sum = 0;
+	int i;
+	for (i = 0; i < words; i++){
+		sum += (buff[0]<<8)&0xFF00;
+		sum += buff[1]&0xFF;
+		buff += 2;
+	}
+	return (uint32_t) sum;
+}
+
 int UDPProcess(gpacket_t *in_pkt)
 {
-	verbose(2, "[UDPProcess]:: packet received for processing");
+	printf("%s", "[UDPProcess]:: packet received for processing\n");
 
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
 
 	// calculate the checksum 
-	int cksum = UDPChecksum(in_pkt);
+	uint16_t cksum = UDPChecksum(in_pkt);
 
 	// create the udp header 	
-	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);	
-	if (cksum != udphdr->checksum){
-		// todo	
-	}	
+	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	udphdr->checksum = cksum;
+
+	printf("%hu\n", cksum);
 
 	IPOutgoingPacket(in_pkt, NULL, 0, 0, UDP_PROTOCOL);
 
 	return EXIT_SUCCESS;
 }
 
-
-int UDPChecksum(gpacket_t *in_pkt)
+uint16_t UDPChecksum(gpacket_t *in_pkt)
 {
-
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data; 
-
-	// initialize sum to udp protocol (17)
-	int sum = ip_pkt->ip_prot;
-
-	// add source 
-	sum += checksum((uchar *)ip_pkt->ip_src, 2);
-		
-	// add dest
-	sum += checksum((uchar *)ip_pkt->ip_dst, 2);
-
-	// get upd length
-	uint16_t udp_len = checksum((uchar *)ip_pkt + 80, 1);
-
-	// add all the data
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
-	sum += checksum((uchar *)ip_pkt + iphdrlen, udp_len);
-	
-	// add udp length
-	sum += udp_len;
+	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	uchar *udppkt_b = (uchar *)udphdr;
 
-	return ~sum;
+	udphdr->checksum = 0;
+	uint32_t sum = 0;
+	uint16_t udp_len = ntohs(ip_pkt->ip_pkt_len) - iphdrlen;
+	int pad = udp_len % 2 == 0 ? 0 : 1;
+	if (pad == 1){
+		udppkt_b[udp_len] = 0x0;
+	}
+	sum += wordsum((uchar *)ip_pkt->ip_dst, 2);
+	sum += wordsum((uchar *)ip_pkt->ip_src, 2);
+	sum += wordsum((uchar *)ip_pkt + iphdrlen, (udp_len + pad)/2);
+	sum += (uint32_t) UDP_PROTOCOL;
+	sum += udp_len;	
+
+	while (sum>>16)
+		sum = (sum & 0xFFFF)+(sum >> 16);
+
+	sum = ~sum;
+	
+	return (uint16_t) sum;
 }
+		
