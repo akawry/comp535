@@ -6,15 +6,25 @@
 #define __UDP_H_
 
 #include <stdint.h>
+#include "simplequeue.h"
 #include "message.h"
 
 typedef struct _udphdr_t 
 {
-	uchar source[2]; // source port
-	uchar dest[2];   // dest port
-	uchar length[2];
-	ushort checksum;  
+	uint16_t source;
+	uint16_t dest;
+	uint16_t length;
+	uint16_t checksum;  
 } udphdr_t;
+
+typedef struct _udpprt_buff_t
+{
+	uint16_t port;
+	simplequeue_t *buff;
+	struct udpprt_buff_t *next;
+} udpprt_buff_t;
+
+udpprt_buff_t* udp_active_ports = NULL;
 
 // function prototypes
 

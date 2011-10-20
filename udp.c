@@ -2,6 +2,7 @@
  * udp.c (collection of functions that implement the UDP (User datagram protocol).
  */
 
+#include "simplequeue.h"
 #include "protocols.h"
 #include "udp.h"
 #include "ip.h"
@@ -10,6 +11,44 @@
 #include <netinet/in.h>
 #include <slack/err.h>
 #include <string.h>
+
+/**
+ * Create a buffer for packets and insert into
+ * list of active buffers 
+ */
+
+udpprt_buff_t* UDPCreatePortBuffer(uint16_t port){
+	udpprt_buff_t *buff;
+	if ((buff = (udpprt_buff_t *)malloc(sizeof(udpprt_buff_t))) == NULL){
+		printf("[UDPCreatePortBuffer]:: Not enough room for buffer\n");
+		return NULL;
+	}
+	buff->port = port;
+	buff->next = NULL;
+	buff->buff = createSimpleQueue("", 0, 0, 0);
+	if (udp_active_ports == NULL){
+		udp_active_ports = buff;
+	} else {
+		udpprt_buff_t *cur = udp_active_ports;
+		while (cur->next)
+			cur = cur->next;
+		cur->next = buff;
+	}
+	return buff;
+}
+
+/**
+ * Get the buffer for packets with the given source
+ */
+udpprt_buff_t* UDPGetPortBuffer(uint16_t port){
+	udpprt_buff_t *cur = udp_active_ports;
+	while (cur){
+		if (cur->port == port)
+			return cur;
+		cur = cur->next;
+	}
+	return NULL;
+}	
 
 int UDPProcess(gpacket_t *in_pkt)
 {
@@ -22,18 +61,32 @@ int UDPProcess(gpacket_t *in_pkt)
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
 
-	// calculate the checksum 
-	uint16_t cksum = UDPChecksum(in_pkt);
-	
-	// original checksum wasn't done, so 1's compliment it 
-	if (cksum == 0){
-		cksum = ~cksum;
+	// packet used checksum (is optional) 
+	if (udphdr->checksum != 0){
+
+		// checksum is used 
+		if (udphdr->checksum == 0xFFFF)
+			udphdr->checksum = 0x0000;
+
+		// calculate the checksum 
+		uint16_t cksum = UDPChecksum(in_pkt);
+
+		if (cksum){
+			printf("[UDPProcess]:: UDP checksum error! %04X\n", cksum);
+			return EXIT_FAILURE;
+		}
 	}
-	udphdr->checksum = cksum;
 
-	IPOutgoingPacket(in_pkt, NULL, 0, 0, UDP_PROTOCOL);
-
-	return EXIT_SUCCESS;
+	// buffer the packet
+	udpprt_buff_t* buff = UDPGetPortBuffer(udphdr->source);
+	if (buff == NULL){	
+		printf("[UDPProcess]:: Allocating new buffer for source port %04X\n", ntohs(udphdr->source));
+		buff = UDPCreatePortBuffer(udphdr->source);
+	} else {
+		printf("[UDPProcess]:: Already have a buffer for source port %04X\n", ntohs(udphdr->source));
+	} 
+	
+	return writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
 }
 
 uint16_t UDPChecksum(gpacket_t *in_pkt)
@@ -47,7 +100,6 @@ uint16_t UDPChecksum(gpacket_t *in_pkt)
 	// extract the packet data and ip header length 
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data; 
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
-	uchar* buff = (uchar *)ip_pkt + iphdrlen;
 
 	// create a udpheader 
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
@@ -64,7 +116,7 @@ uint16_t UDPChecksum(gpacket_t *in_pkt)
 	
 	// sum the udp header and data 
 	for (i = 0; i < len_udp + pad; i += 2){
-		word16 =((buff[i]<<8)&0xFF00)+(buff[i+1]&0xFF);
+		word16 =((udppkt_b[i]<<8)&0xFF00)+(udppkt_b[i+1]&0xFF);
 		sum = sum + (uint32_t)word16;
 	}	
 
