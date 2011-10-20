@@ -17,12 +17,13 @@
  * list of active buffers 
  */
 
-udpprt_buff_t* UDPCreatePortBuffer(uint16_t port){
+udpprt_buff_t* UDPCreatePortBuffer(uchar addr[], uint16_t port){
 	udpprt_buff_t *buff;
 	if ((buff = (udpprt_buff_t *)malloc(sizeof(udpprt_buff_t))) == NULL){
 		printf("[UDPCreatePortBuffer]:: Not enough room for buffer\n");
 		return NULL;
 	}
+	int i; for (i = 0; i < 4; i++) buff->addr[i] = addr[i];
 	buff->port = port;
 	buff->next = NULL;
 	buff->buff = createSimpleQueue("", 0, 0, 0);
@@ -38,12 +39,20 @@ udpprt_buff_t* UDPCreatePortBuffer(uint16_t port){
 }
 
 /**
- * Get the buffer for packets with the given source
+ * Get the buffer for packets with the given port and address
  */
-udpprt_buff_t* UDPGetPortBuffer(uint16_t port){
+udpprt_buff_t* UDPGetPortBuffer(uchar addr[], uint16_t port){
+	int i, found;
 	udpprt_buff_t *cur = udp_active_ports;
 	while (cur){
-		if (cur->port == port)
+		found = 1;
+		for (i = 0; i < 4; i++){
+			if (addr[i] != cur->addr[i]){
+				found = 0;
+				break;
+			}
+		}
+		if (found && cur->port == port)
 			return cur;
 		cur = cur->next;
 	}
@@ -78,10 +87,10 @@ int UDPProcess(gpacket_t *in_pkt)
 	}
 
 	// buffer the packet
-	udpprt_buff_t* buff = UDPGetPortBuffer(udphdr->source);
+	udpprt_buff_t* buff = UDPGetPortBuffer(ip_pkt->ip_src, udphdr->source);
 	if (buff == NULL){	
 		printf("[UDPProcess]:: Allocating new buffer for source port %04X\n", ntohs(udphdr->source));
-		buff = UDPCreatePortBuffer(udphdr->source);
+		buff = UDPCreatePortBuffer(ip_pkt->ip_src, udphdr->source);
 	} else {
 		printf("[UDPProcess]:: Already have a buffer for source port %04X\n", ntohs(udphdr->source));
 	} 

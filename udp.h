@@ -19,6 +19,7 @@ typedef struct _udphdr_t
 
 typedef struct _udpprt_buff_t
 {
+	uchar addr[4];
 	uint16_t port;
 	simplequeue_t *buff;
 	struct udpprt_buff_t *next;
