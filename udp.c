@@ -12,6 +12,8 @@
 #include <slack/err.h>
 #include <string.h>
 
+udpprt_buff_t* udp_active_ports = NULL;
+
 /**
  * Create a buffer for packets and insert into
  * list of active buffers 
@@ -26,7 +28,7 @@ udpprt_buff_t* UDPCreatePortBuffer(uchar addr[], uint16_t port){
 	int i; for (i = 0; i < 4; i++) buff->addr[i] = addr[i];
 	buff->port = port;
 	buff->next = NULL;
-	buff->buff = createSimpleQueue("", 0, 0, 0);
+	buff->buff = createSimpleQueue("", MAX_QUEUE_SIZE, 0, 0);
 	if (udp_active_ports == NULL){
 		udp_active_ports = buff;
 	} else {
@@ -57,6 +59,36 @@ udpprt_buff_t* UDPGetPortBuffer(uchar addr[], uint16_t port){
 		cur = cur->next;
 	}
 	return NULL;
+}
+
+/**
+ * Start listening on the port for the given address
+ */
+udpprt_buff_t *UDPOpen(uchar* addr, uint16_t port){
+	uchar tmpbuff[64];
+	gNtohl(tmpbuff, addr);
+	uchar ip_addr[4];
+	Dot2IP(addr, ip_addr);
+	return UDPCreatePortBuffer(ip_addr, port);
+}
+
+/**
+ * Dump the contents of the buffer for the given port and address
+ */
+void UDPReceive(uchar* addr, uint16_t port){
+	uchar tmpbuff[64];
+	gNtohl(tmpbuff, addr);
+	uchar ip_addr[4];
+	Dot2IP(addr, ip_addr);
+	udpprt_buff_t *buff = UDPGetPortBuffer(ip_addr, port);
+	if (buff != NULL){
+		gpacket_t *pkt;
+		int rvalue;
+		int pktsize;	
+		while ((rvalue = readQueue(buff->buff, (void **)&pkt, &pktsize)) != EXIT_FAILURE){
+			printUDPPacket(pkt);	
+		}
+	}
 }	
 
 int UDPProcess(gpacket_t *in_pkt)
@@ -86,17 +118,16 @@ int UDPProcess(gpacket_t *in_pkt)
 		}
 	}
 
-	// buffer the packet
-	udpprt_buff_t* buff = UDPGetPortBuffer(ip_pkt->ip_src, udphdr->source);
-	if (buff == NULL){	
-		printf("[UDPProcess]:: Allocating new buffer for source port %04X\n", ntohs(udphdr->source));
-		buff = UDPCreatePortBuffer(ip_pkt->ip_src, udphdr->source);
-	} else {
-		printf("[UDPProcess]:: Already have a buffer for source port %04X\n", ntohs(udphdr->source));
-	} 
-	
-	return writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
+	// buffer the packet if the buffer exists, otherwise drop the packet
+	udpprt_buff_t* buff = UDPGetPortBuffer(ip_pkt->ip_dst, udphdr->dest);
+	if (buff != NULL)
+		return writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
+	else 
+		printf("[UDPProcess]:: No one listening on destination ip and source... dropping packet!\n");	
+
+	return EXIT_FAILURE;
 }
+	
 
 uint16_t UDPChecksum(gpacket_t *in_pkt)
 {

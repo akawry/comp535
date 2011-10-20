@@ -25,8 +25,6 @@ typedef struct _udpprt_buff_t
 	struct udpprt_buff_t *next;
 } udpprt_buff_t;
 
-udpprt_buff_t* udp_active_ports = NULL;
-
 // function prototypes
 
 int UDPProcess(gpacket_t *in_pkt);
