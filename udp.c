@@ -66,17 +66,12 @@ udpprt_buff_t* UDPGetPortBuffer(uchar addr[], uint16_t port){
 /**
  * Start listening on the port for the given address
  */
-int UDPOpen(uint16_t port){
+int UDPOpen(uchar ip_addr[], uint16_t port){
 	int success;
-
-	uchar iface_ip[MAX_MTU][4];
-	uchar ip_addr[4];
-	char tmpbuf[MAX_TMPBUF_LEN];
-	findAllInterfaceIPs(MTU_tbl, iface_ip);
-	COPY_IP(ip_addr, gHtonl(tmpbuf, iface_ip[0]));
+	uchar tmpbuf[4];
 
 	udpprt_buff_t *buff;
-	if ((buff = UDPGetPortBuffer(ip_addr, port)) == NULL){
+	if ((buff = UDPGetPortBuffer(gHtonl(tmpbuf, ip_addr), port)) == NULL){
 		UDPCreatePortBuffer(ip_addr, port);
 		success = EXIT_SUCCESS;
 	} else {
@@ -95,17 +90,18 @@ int UDPOpen(uint16_t port){
  * Dump the contents of the buffer for the given port and address into the
  * provided string buffer 
  */
-int UDPReceive(uint16_t port, uchar* recv_buff){
-	uchar iface_ip[MAX_MTU][4];
-	uchar ip_addr[4];
-	char tmpbuf[MAX_TMPBUF_LEN];
-	findAllInterfaceIPs(MTU_tbl, iface_ip);
-	COPY_IP(ip_addr, gHtonl(tmpbuf, iface_ip[0]));
+int UDPReceive(uchar ip_addr[], uint16_t port, uchar* recv_buff){
+	uchar *tmprecv;
 	udpprt_buff_t *buff = UDPGetPortBuffer(ip_addr, port);
+
 	if (buff != NULL){
 		int rvalue;
-		int pktsize;	
-		while ((rvalue = readQueue(buff->buff, (void **)&recv_buff, &pktsize)) != EXIT_FAILURE);
+		int pktsize;
+		int copied = 0;		
+		while ((rvalue = readQueue(buff->buff, (void **)&tmprecv, &pktsize)) != EXIT_FAILURE){
+			strncpy(recv_buff + copied, tmprecv, pktsize);
+			copied += pktsize;		
+		}
 		return EXIT_SUCCESS; 
 	} else {
 		printf("[UDPReceive]:: No one listening on port!\n");
@@ -123,10 +119,12 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	
 	//extract the ip packet header and header length
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
-	int iphdrlen = ip_pkt->ip_hdr_len *4;
+	int iphdrlen = 20;
 	
 	// Find location of udpheader 
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+
+	printf("setting source and dest to %hu and %hu\n", udp_src_port, udp_dest_port);
 
 	// Put header info to the gpacket
 	udphdr->dest = htonl(udp_dest_port);
@@ -142,12 +140,10 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 
 	COPY_IP(ip_pkt->ip_src, gHtonl(tmpbuf, iface_ip[0]));
 
-	// ports
-
 	// Looping to send packets
 	for(left_bytes = len ; left_bytes >= 0 ; left_bytes -= MAX_UDP_PAYLOAD) {
 		tmpCount = left_bytes >= MAX_UDP_PAYLOAD ? MAX_UDP_PAYLOAD : left_bytes;
-		udphdr->length = htonl(tmpCount + 8);
+		udphdr->length = tmpCount + 8;
 
 		// Put data into gpacket, and break message using if it reach the max length
 		strncpy((uchar *)udphdr + 8, buff + copied, tmpCount);
@@ -155,12 +151,9 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 
 		// Calculate checksum
 		udphdr->checksum = htonl(UDPChecksum(ip_pkt));
-	
-		printIPPacket(ip_pkt);
 
-		// send the message to the IP routine for further processing
-		// IPOutgoingPacket(/context, packet, IPaddr, size, newflag, UDP_PROTOCOL)
-		IPOutgoingPacket(ip_pkt, dst_ip, tmpCount + 8 + iphdrlen, 1, 17);
+		// send the message to the IP routine to ship it out
+		IPOutgoingPacket(out_pkt, dst_ip, tmpCount + 8 + iphdrlen, 1, 17);
 	}
 
 	return EXIT_SUCCESS;
@@ -176,6 +169,8 @@ int UDPProcess(gpacket_t *in_pkt)
 	
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+
+	printf("payload: %s\n", (uchar *)ip_pkt + iphdrlen + 8);
 
 	// packet used checksum (is optional) 
 	if (udphdr->checksum != 0){
