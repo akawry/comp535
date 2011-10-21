@@ -34,6 +34,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "simplequeue.h"
+#include "udp.h"
 
 
 Map *cli_map;
@@ -54,13 +55,7 @@ extern pktcore_t *pcore;
  * The CLI registers and commands into a hash table and forks a thread to
  * handle the command line.
  */
-typedef struct _udpprt_buff_t
-{
-	uchar addr[4];
-	uint16_t port;
-	simplequeue_t *buff;
-	struct udpprt_buff_t *next;
-}udpprt_buff_t;
+
 
 void udpsendCmd();
 void udpreceiveCmd();
@@ -883,8 +878,7 @@ void udpreceiveCmd()
 		
 	printf("[udpreceive]::udp receive command, port = %d,IP = %s,Message = %s",port,IP2Dot(tmpbuf,ip_addr),messagebuf);
 	
-	recv_udp(port,messagebuf,0);
-	//ICMPDoPing(ip_addr, pkt_size, tries);
+	UDPReceive(ip_addr,port);
 }
 
 /*
@@ -935,9 +929,9 @@ void udpsendCmd()
 
 	printf("[udpsend]::udp send command, port = %d,IP = %s,Message = %s",port,IP2Dot(tmpbuf,ip_addr),messagebuf);
 	
-	send_udp(port, ip_addr, ownPort, messagebuf, pkt_size);
+	UDPSEND(port, ip_addr, ownPort, messagebuf, pkt_size);
 }
-
+/*
 //basically, send_udp would gather: src IP, des IP, src Port, des Port, Data
 //and calculate: length and checksum, then pass it to IPOutgoingPacket
 //Also need to break messages if the length is higher than maximum length:65507=65535-8(udpHdr)-20(IPHdr)
@@ -995,30 +989,7 @@ void send_udp(int udp_dst_port, uchar *des_ip, int udp_src_port, char *data, int
 
 }
 
-int recv_udp(int src, char *buf, int *len)
-{
-	// buffer the packet
-	udpprt_buff_t* buff = UDPGetPortBuffer(src);
-	if (buff == NULL){	
-		printf("[UDPReceive]:: no data for source port %04X\n", src);
-		return 0;
-		//buff = UDPCreatePortBuffer(udphdr->source);
-	} else {
-		simplequeue_t *data = buff->buff;
-		unsigned char *message;
-		int len;
-		
-		readQueue(data,(void **)&message,&len);
-		
-		printf("Data is %s",message);
-		
-		*data = NULL;
-		return 1;
-		
-	}
-}
-
-
+*/
 
 /*
  * send a ping packet...

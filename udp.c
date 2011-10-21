@@ -91,6 +91,64 @@ void UDPReceive(uchar* addr, uint16_t port){
 	}
 }	
 
+//basically, send_udp would gather: src IP, des IP, src Port, des Port, Data
+//and calculate: length and checksum, then pass it to IPOutgoingPacket
+//Also need to break messages if the length is higher than maximum length:65507=65535-8(udpHdr)-20(IPHdr)
+void UDPSEND(int udp_dst_port, uchar *des_ip, int udp_src_port, char *data, int len_byte){
+	
+	char tmpbuf[MAX_TMPBUF_LEN];
+	gpacket_t *out_pkt = (gpacket_t *) malloc(sizeof(gpacket_t));
+	uchar *dataptr;
+	uint16_t chksum;
+	uchar iface_ip[MAX_MTU][4];
+	int left_bytes;
+	uint16_t tmpCount;
+	
+	//extract the ip packet header and header length
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = ip_pkt->ip_hdr_len *4;
+	
+	// Find location of udpheader 
+	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	// Put header info to the gpacket
+	udphdr->dest = htonl(udp_dst_port);	//TODO: check port range convert from int to uint16_t
+	udphdr->source = htonl(udp_src_port);
+	udphdr->checksum = 0;
+	
+	// Put IP to the gpacket
+	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, dst_ip));
+	
+	if ((count = findAllInterfaceIPs(MTU_tbl, iface_ip)) == 0)
+	{
+		iface_ip[0] = Dot2IP("192.168.0.1", ip_addr);
+	}
+	COPY_IP(ip_pkt->ip_src, gHtonl(tmpbuf, iface_ip[0]));
+	
+	// Looping to send packets
+	for(left_bytes = pkt_size ; left_bytes>0 ; left_bytes-65507)
+	{
+		tmpCount = len_byte > 65507 ? 65507 : left_bytes ;
+		udphdr->length = htonl(tmpCount + 8);
+		// Put data into gpacket, and break message using if it reach the max length
+		dataptr = (uchar *)udphdr + 8;
+		strncpy(dataptr, data, tmpCount);
+		
+		data = data[tmpCount];
+
+		// Calculate checksum
+		chksum = UDPChecksum(out_pkt);
+		udphdr->checksum = htonl(tmpbuf, chksum);
+
+		verbose(2, "[sendPingPacket]:: Sending... ICMP ping to  %s", IP2Dot(tmpbuf, dst_ip));
+
+		// send the message to the IP routine for further processing
+		// IPOutgoingPacket(/context, packet, IPaddr, size, newflag, UDP_PROTOCOL)
+		IPOutgoingPacket(out_pkt, dst_ip, ip_data_size, 1, 17);
+	}
+
+}
+
+
 int UDPProcess(gpacket_t *in_pkt)
 {
 	printf("%s", "[UDPProcess]:: packet received for processing\n");
