@@ -9,6 +9,8 @@
 #include "simplequeue.h"
 #include "message.h"
 
+#define MAX_UDP_PAYLOAD 65507
+
 typedef struct _udphdr_t 
 {
 	uint16_t source;
