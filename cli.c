@@ -854,22 +854,32 @@ void udpopenCmd(){
 	int port;
 	char tmpbuf[MAX_TMPBUF_LEN];
 	char *messagebuf;
+	uchar* ip_addr[4];
 
 	if (next_tok == NULL){
-		printf("usage: udpopen port\n");
+		printf("usage: udpopen IP_addr port\n");
+		return;
+	}
+
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, ip_addr);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: udpopen IP_addr port\n");
 		return;
 	}
 
 	if (next_tok != NULL) {
 		port = gAtoi(next_tok);
 	} else {
-		printf("usage: udpopen port\n");
+		printf("usage: udpopen IP_addr port\n");
 		return;
 	}
 		
-	printf("[UDPOpen]::udp open command, port = %d\n", port);
+	printf("[UDPOpen]::udp open command, ip address = %s, port = %d\n", IP2Dot(tmpbuf, ip_addr), port);
 	
-	UDPOpen(port);
+	UDPOpen(ip_addr, port);
 }
 
 void udpreceiveCmd()
@@ -878,23 +888,31 @@ void udpreceiveCmd()
 	int port;
 	char tmpbuf[MAX_TMPBUF_LEN];
 	char *messagebuf;
+	uchar ip_addr[4];
 
 	if (next_tok == NULL){
-		printf("usage: udpreceive port\n");
+		printf("usage: udpreceive IP_addr port\n");
+		return;
+	}
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, ip_addr);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: udpreceive IP_addr port\n");
 		return;
 	}
 
 	if (next_tok != NULL) {
 		port = gAtoi(next_tok);
-		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: udpreceive port\n");
+		printf("usage: udpreceive IP_addr port\n");
 		return;
 	}
 		
-	printf("[UDPReceive]::udp receive command, port = %d\n", port);
+	printf("[UDPReceive]::udp receive command, ip address = %s, port = %d\n", IP2Dot(tmpbuf, ip_addr), port);
 	
-	UDPReceive(port, messagebuf);
+	UDPReceive(ip_addr, port, messagebuf);
 }
 
 /*
