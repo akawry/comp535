@@ -901,7 +901,7 @@ void udpsendCmd()
 
 	if (next_tok == NULL)
 	{
-		printf("usage: udpsend Dest_IP PORT [MESSAGE]");
+		printf("usage: udpsend IP_addr Dst_PORT [-port own_PORT] [-message MESSAGE]");
 		return;
 	}else
 	{
@@ -910,7 +910,7 @@ void udpsendCmd()
 		
 		if (next_tok == NULL)
 		{
-			printf("usage: udpsend Dest_IP PORT [MESSAGE]");
+			printf("usage: udpsend IP_addr Dst_PORT [-port own_PORT] [-message MESSAGE]");
 			return;
 		}else
 		{
