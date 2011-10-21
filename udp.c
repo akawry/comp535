@@ -71,7 +71,7 @@ int UDPOpen(uchar ip_addr[], uint16_t port){
 	uchar tmpbuf[4];
 
 	udpprt_buff_t *buff;
-	if ((buff = UDPGetPortBuffer(gHtonl(tmpbuf, ip_addr), port)) == NULL){
+	if ((buff = UDPGetPortBuffer(ip_addr, port)) == NULL){
 		UDPCreatePortBuffer(ip_addr, port);
 		success = EXIT_SUCCESS;
 	} else {
@@ -91,16 +91,23 @@ int UDPOpen(uchar ip_addr[], uint16_t port){
  * provided string buffer 
  */
 int UDPReceive(uchar ip_addr[], uint16_t port, uchar* recv_buff){
-	uchar *tmprecv;
 	udpprt_buff_t *buff = UDPGetPortBuffer(ip_addr, port);
 
 	if (buff != NULL){
 		int rvalue;
 		int pktsize;
-		int copied = 0;		
-		while ((rvalue = readQueue(buff->buff, (void **)&tmprecv, &pktsize)) != EXIT_FAILURE){
-			strncpy(recv_buff + copied, tmprecv, pktsize);
-			copied += pktsize;		
+		int copied = 0;
+		int iphdrlen;
+		gpacket_t *in_pkt;
+		ip_packet_t *ip_pkt;
+		udphdr_t *udphdr;	
+	
+		while ((rvalue = readQueue(buff->buff, (void **)&in_pkt, &pktsize)) != EXIT_FAILURE){
+			ip_pkt = (ip_packet_t *)in_pkt->data.data;
+			iphdrlen = ip_pkt->ip_hdr_len * 4;
+			udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);		
+			strncpy(recv_buff + copied, (uchar *)ip_pkt + iphdrlen + 8, udphdr->length - 8);
+			copied += udphdr->length - 8;	
 		}
 		return EXIT_SUCCESS; 
 	} else {
@@ -124,11 +131,9 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	// Find location of udpheader 
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
 
-	printf("setting source and dest to %hu and %hu\n", udp_src_port, udp_dest_port);
-
 	// Put header info to the gpacket
-	udphdr->dest = htonl(udp_dest_port);
-	udphdr->source = htonl(udp_src_port);
+	udphdr->dest = udp_dest_port;
+	udphdr->source = udp_src_port;
 	udphdr->checksum = 0;
 	
 	// Put IP to the gpacket (for udp checksumming)
@@ -166,7 +171,8 @@ int UDPProcess(gpacket_t *in_pkt)
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
-	
+	uchar tmpbuff[MAX_TMPBUF_LEN];
+
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
 
@@ -189,11 +195,13 @@ int UDPProcess(gpacket_t *in_pkt)
 	}
 
 	// buffer the packet if the buffer exists, otherwise drop the packet
-	udpprt_buff_t* buff = UDPGetPortBuffer(ip_pkt->ip_dst, udphdr->dest);
-	if (buff != NULL)
-		return writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
-	else 
-		printf("[UDPProcess]:: No one listening on destination ip and source... dropping packet!\n");	
+	udpprt_buff_t* buff = UDPGetPortBuffer(gNtohl(tmpbuff, ip_pkt->ip_dst), udphdr->dest);
+	if (buff != NULL){
+		writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
+		printf("[UDPProcess]:: Buffered packet... \n");
+	} else {
+		printf("[UDPProcess]:: No one listening on destination ip and source... dropping packet!\n");
+	}	
 
 	return EXIT_FAILURE;
 }
