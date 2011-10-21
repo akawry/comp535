@@ -854,7 +854,7 @@ void udpopenCmd(){
 	int port;
 	char tmpbuf[MAX_TMPBUF_LEN];
 	char *messagebuf;
-	uchar* ip_addr[4];
+	uchar ip_addr[4];
 
 	if (next_tok == NULL){
 		printf("usage: udpopen IP_addr port\n");

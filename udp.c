@@ -68,9 +68,10 @@ udpprt_buff_t* UDPGetPortBuffer(uchar addr[], uint16_t port){
  */
 int UDPOpen(uchar ip_addr[], uint16_t port){
 	int success;
+	uchar tmpbuf[4];
 
 	udpprt_buff_t *buff;
-	if ((buff = UDPGetPortBuffer(ip_addr, port)) == NULL){
+	if ((buff = UDPGetPortBuffer(gHtonl(tmpbuf, ip_addr), port)) == NULL){
 		UDPCreatePortBuffer(ip_addr, port);
 		success = EXIT_SUCCESS;
 	} else {
@@ -118,10 +119,12 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	
 	//extract the ip packet header and header length
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
-	int iphdrlen = ip_pkt->ip_hdr_len *4;
+	int iphdrlen = 20;
 	
 	// Find location of udpheader 
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+
+	printf("setting source and dest to %hu and %hu\n", udp_src_port, udp_dest_port);
 
 	// Put header info to the gpacket
 	udphdr->dest = htonl(udp_dest_port);
@@ -140,7 +143,7 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	// Looping to send packets
 	for(left_bytes = len ; left_bytes >= 0 ; left_bytes -= MAX_UDP_PAYLOAD) {
 		tmpCount = left_bytes >= MAX_UDP_PAYLOAD ? MAX_UDP_PAYLOAD : left_bytes;
-		udphdr->length = htonl(tmpCount + 8);
+		udphdr->length = tmpCount + 8;
 
 		// Put data into gpacket, and break message using if it reach the max length
 		strncpy((uchar *)udphdr + 8, buff + copied, tmpCount);
@@ -150,7 +153,7 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 		udphdr->checksum = htonl(UDPChecksum(ip_pkt));
 
 		// send the message to the IP routine to ship it out
-		IPOutgoingPacket(ip_pkt, dst_ip, tmpCount + 8 + iphdrlen, 1, 17);
+		IPOutgoingPacket(out_pkt, dst_ip, tmpCount + 8 + iphdrlen, 1, 17);
 	}
 
 	return EXIT_SUCCESS;
@@ -166,6 +169,8 @@ int UDPProcess(gpacket_t *in_pkt)
 	
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+
+	printf("payload: %s\n", (uchar *)ip_pkt + iphdrlen + 8);
 
 	// packet used checksum (is optional) 
 	if (udphdr->checksum != 0){
