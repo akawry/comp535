@@ -59,9 +59,9 @@ extern pktcore_t *pcore;
 
 void udpsendCmd();
 void udpreceiveCmd();
-void send_udp(int dst, char *data, int len);
-int recv_udp(int src, char *buf, int *len);
+void udpopenCmd();
 void clientCmd();
+
 int CLIInit(router_config *rarg)
 {
 
@@ -109,6 +109,7 @@ int CLIInit(router_config *rarg)
 	registerCLI("filter", filterCmd, SHELP_FILTER, USAGE_FILTER, LHELP_FILTER);
 	registerCLI("udpsend",udpsendCmd,SHELP_UDPSEND,USAGE_UDPSEND,LHELP_UDPSEND);
 	registerCLI("udpreceive",udpreceiveCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
+	registerCLI("udpopen",udpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("client",clientCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	
 	
@@ -848,37 +849,52 @@ void clientCmd()
 	*/
 }
 
-void udpreceiveCmd()
-{
+void udpopenCmd(){
 	char *next_tok = strtok(NULL, " \n");
-	int port, pkt_size;
-	uchar ip_addr[4];
+	int port;
 	char tmpbuf[MAX_TMPBUF_LEN];
 	char *messagebuf;
 
-	if (next_tok == NULL)
+	if (next_tok == NULL){
+		printf("usage: udpopen port\n");
 		return;
+	}
 
-	if (next_tok != NULL)
-	{
+	if (next_tok != NULL) {
+		port = gAtoi(next_tok);
+	} else {
+		printf("usage: udpopen port\n");
+		return;
+	}
+		
+	printf("[UDPOpen]::udp open command, port = %d\n", port);
+	
+	UDPOpen(port);
+}
+
+void udpreceiveCmd()
+{
+	char *next_tok = strtok(NULL, " \n");
+	int port;
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf;
+
+	if (next_tok == NULL){
+		printf("usage: udpreceive port\n");
+		return;
+	}
+
+	if (next_tok != NULL) {
 		port = gAtoi(next_tok);
 		next_tok = strtok(NULL, " \n");
-	} else
+	} else {
+		printf("usage: udpreceive port\n");
 		return;
+	}
 		
-	Dot2IP(next_tok, ip_addr);
+	printf("[UDPReceive]::udp receive command, port = %d\n", port);
 	
-	
-	if ((next_tok = strtok(NULL, " \n")) != NULL)
-	{
-		messagebuf = next_tok;
-	} else
-		messagebuf = "test";
-		//pkt_size = 64;
-		
-	printf("[udpreceive]::udp receive command, port = %d,IP = %s,Message = %s",port,IP2Dot(tmpbuf,ip_addr),messagebuf);
-	
-	UDPReceive(ip_addr,port);
+	UDPReceive(port, messagebuf);
 }
 
 /*
