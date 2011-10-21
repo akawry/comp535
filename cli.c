@@ -853,46 +853,6 @@ void clientCmd()
 	*/
 }
 
-/*
- * send a UDP packet...
- * udpsend [-PORT] IP_addr [-MESSAGE]
- */
-void udpsendCmd()
-{
-	char *next_tok = strtok(NULL, " \n");
-	int port, pkt_size;
-	uchar ip_addr[4];
-	char tmpbuf[MAX_TMPBUF_LEN];
-	char *messagebuf;
-
-	if (next_tok == NULL)
-		return;
-
-	if (next_tok != NULL)
-	{
-		port = gAtoi(next_tok);
-		next_tok = strtok(NULL, " \n");
-	} else
-		return;
-		
-	Dot2IP(next_tok, ip_addr);
-	
-	
-	if ((next_tok = strtok(NULL, " \n")) != NULL)
-	{
-		messagebuf = next_tok;
-	} else
-		messagebuf = "test";
-		//pkt_size = 64;
-		
-	printf("[udpsend]::udp send command, port = %d,IP = %s,Message = %s",port,IP2Dot(tmpbuf,ip_addr),messagebuf);
-	
-	send_udp()
-	//ICMPDoPing(ip_addr, pkt_size, tries);
-}
-
-
-
 void udpreceiveCmd()
 {
 	char *next_tok = strtok(NULL, " \n");
@@ -927,57 +887,112 @@ void udpreceiveCmd()
 	//ICMPDoPing(ip_addr, pkt_size, tries);
 }
 
-void send_udp(int dst, char *data, int len)
+/*
+ * send a UDP packet...
+ * udpsend IP_addr Dst_PORT [-port own_PORT] [-message MESSAGE]
+ */
+void udpsendCmd()
 {
-	gpacket_t *pkt;
+	char *next_tok = strtok(NULL, " \n");
+	int port, pkt_size, ownPort=0;
+	uchar ip_addr[4];
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf;
+
+	if (next_tok == NULL)
+	{
+		printf("usage: udpsend Dest_IP PORT [MESSAGE]");
+		return;
+	}else
+	{
+		Dot2IP(next_tok, ip_addr);
+		next_tok = strtok(NULL, " \n");
+		
+		if (next_tok == NULL)
+		{
+			printf("usage: udpsend Dest_IP PORT [MESSAGE]");
+			return;
+		}else
+		{
+			port = gAtoi(next_tok);
+			
+			while ((next_tok = strtok(NULL, " \n")) != NULL)
+			{
+				if (!strcmp(next_tok, "-port"))
+				{
+					next_tok = strtok(NULL, " \n");
+					ownPort = gAtoi(next_tok);
+				}
+				else if (!strcmp(next_tok, "-message"))
+				{
+					next_tok = strtok(NULL, "\n");
+					messagebuf = next_tok;	
+				}
+			}
+			pkt_size = strlen(messagebuf);
+		}
+	}
+
+	printf("[udpsend]::udp send command, port = %d,IP = %s,Message = %s",port,IP2Dot(tmpbuf,ip_addr),messagebuf);
 	
-	pkt_frame_t *frame;
-	pkt_data_t *data;
-	
-	
-	
-	pkt->frame = frame;
-	pkt->data = data;
-	
+	send_udp(port, ip_addr, ownPort, messagebuf, pkt_size);
 }
 
-void send_udp(uchar *dst_ip, int size, int seq,char *data)
-{
+//basically, send_udp would gather: src IP, des IP, src Port, des Port, Data
+//and calculate: length and checksum, then pass it to IPOutgoingPacket
+//Also need to break messages if the length is higher than maximum length:65507=65535-8(udpHdr)-20(IPHdr)
+void send_udp(int udp_dst_port, uchar *des_ip, int udp_src_port, char *data, int len_byte){
+	
+	char tmpbuf[MAX_TMPBUF_LEN];
 	gpacket_t *out_pkt = (gpacket_t *) malloc(sizeof(gpacket_t));
-	//ip_packet_t *ipkt = (ip_packet_t *)(out_pkt->data.data);
-//	ipkt->ip_hdr_len = 5;                                  // no IP header options!!
-//	icmphdr_t *icmphdr = (icmphdr_t *)((uchar *)ipkt + ipkt->ip_hdr_len*4);
-	ushort cksum;
-	struct timeval *tp = (struct timeval *)((uchar *)icmphdr + 8);
-	struct timezone tz;
 	uchar *dataptr;
-	int i;
-	char tmpbuf[64];
+	uint16_t chksum;
+	uchar iface_ip[MAX_MTU][4];
+	int left_bytes;
+	uint16_t tmpCount;
+	
+	//extract the ip packet header and header length
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = ip_pkt->ip_hdr_len *4;
+	
+	// Find location of udpheader 
+	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	// Put header info to the gpacket
+	udphdr->dest = htonl(udp_dst_port);	//TODO: check port range convert from int to uint16_t
+	udphdr->source = htonl(udp_src_port);
+	udphdr->checksum = 0;
+	
+	// Put IP to the gpacket
+	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, dst_ip));
+	
+	if ((count = findAllInterfaceIPs(MTU_tbl, iface_ip)) == 0)
+	{
+		iface_ip[0] = Dot2IP("192.168.0.1", ip_addr);
+	}
+	COPY_IP(ip_pkt->ip_src, gHtonl(tmpbuf, iface_ip[0]));
+	
+	// Looping to send packets
+	for(left_bytes = pkt_size ; left_bytes>0 ; left_bytes-65507)
+	{
+		tmpCount = len_byte > 65507 ? 65507 : left_bytes ;
+		udphdr->length = htonl(tmpCount + 8);
+		// Put data into gpacket, and break message using if it reach the max length
+		dataptr = (uchar *)udphdr + 8;
+		strncpy(dataptr, data, tmpCount);
+		
+		data = data[tmpCount];
 
-	pstat.ntransmitted++;
+		// Calculate checksum
+		chksum = UDPChecksum(out_pkt);
+		udphdr->checksum = htonl(tmpbuf, chksum);
 
-	icmphdr->type = ICMP_ECHO_REQUEST;
-	icmphdr->code = 0;
-	icmphdr->checksum = 0;
-	icmphdr->un.echo.id = getpid() & 0xFFFF;
-	icmphdr->un.echo.sequence = seq;
-	gettimeofday(tp, &tz);
+		verbose(2, "[sendPingPacket]:: Sending... ICMP ping to  %s", IP2Dot(tmpbuf, dst_ip));
 
-	dataptr = ((uchar *)icmphdr + 8 +  sizeof(struct timeval));
-	// pad data...
-	for (i = 8; i < size; i++)
-		*dataptr++ = i;
+		// send the message to the IP routine for further processing
+		// IPOutgoingPacket(/context, packet, IPaddr, size, newflag, UDP_PROTOCOL)
+		IPOutgoingPacket(out_pkt, dst_ip, ip_data_size, 1, 17);
+	}
 
-	cksum = checksum((uchar *)icmphdr, size/2);  // size = payload (given) + icmp_header
-	icmphdr->checksum = htons(cksum);
-
-	verbose(2, "[sendPingPacket]:: Sending... ICMP ping to  %s", IP2Dot(tmpbuf, dst_ip));
-
-	// send the message to the IP routine for further processing
-	// the IP should create new header .. provide needed information from here.
-	// tag the message as new packet
-	// IPOutgoingPacket(/context, packet, IPaddr, size, newflag, source)
-	IPOutgoingPacket(out_pkt, dst_ip, size, 1, UDP_PROTOCOL);
 }
 
 int recv_udp(int src, char *buf, int *len)
