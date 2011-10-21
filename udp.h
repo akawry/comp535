@@ -31,5 +31,8 @@ typedef struct _udpprt_buff_t
 
 int UDPProcess(gpacket_t *in_pkt);
 uint16_t UDPChecksum(gpacket_t *in_pkt);
+int UDPOpen(uint16_t port);
+int UDPReceive(uint16_t port, uchar* recv_buff);
+int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar* buff, int len);
 
 #endif
