@@ -910,9 +910,11 @@ void udpreceiveCmd()
 		return;
 	}
 		
-	printf("[UDPReceive]::udp receive command, ip address = %s, port = %d\n", IP2Dot(tmpbuf, ip_addr), port);
+	printf("[UDPReceive]::udp receive command called, ip address = %s, port = %d\n", IP2Dot(tmpbuf, ip_addr), port);
 	
 	UDPReceive(ip_addr, port, messagebuf);
+	printf("[UDPReceive]:: Payload: %s\n", messagebuf);
+	printf("hello we got here\n");
 }
 
 /*
@@ -957,7 +959,7 @@ void udpsendCmd()
 					messagebuf = next_tok;	
 				}
 			}
-			pkt_size = strlen(messagebuf);
+			pkt_size = strlen(messagebuf) + 1;
 		}
 	}
 
