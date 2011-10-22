@@ -884,7 +884,7 @@ void udpclientCmd()
 	UDPOpen(source_addr, source_port);
 	while(1){
 		printf("#");
-		scanf("%s", &writebuf);
+		scanf("%s", writebuf);
 		UDPSend(dest_addr, dest_port, source_port, writebuf, strlen(writebuf) + 1);
 		UDPReceive(source_addr, source_port, readbuf);
 		printf("%s\n", readbuf);
