@@ -193,14 +193,8 @@ void printUDPPacket(gpacket_t *msg)
 	printf("\nUDP: ----- UDP Header -----\n");
 	printf("UDP: Source	: 0x%04X\n", udphdr->source);
 	printf("UDP: Dest	: 0x%04X\n", udphdr->dest);
-	printf("UDP: Length	: %02hu\n", udphdr->length);
+	printf("UDP: Length	: 0x%04x\n", udphdr->length);
 	printf("UDP: Checksum	: 0x%04X\n", udphdr->checksum);
-	printf("UDP: ----- UDP Data -----\n");
-	uchar *data = udphdr + 8;
-	/*while (data < udphdr + udphdr->length){
-		printf("%u", data);
-		data++;
-	}*/
 	printf("\n");
 }
 

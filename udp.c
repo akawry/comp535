@@ -96,7 +96,6 @@ int UDPReceive(uchar ip_addr[], uint16_t port, uchar* recv_buff){
 	if (buff != NULL){
 		int rvalue;
 		int pktsize;
-		int copied = 0;
 		int iphdrlen;
 		gpacket_t *in_pkt;
 		ip_packet_t *ip_pkt;
@@ -106,8 +105,8 @@ int UDPReceive(uchar ip_addr[], uint16_t port, uchar* recv_buff){
 			ip_pkt = (ip_packet_t *)in_pkt->data.data;
 			iphdrlen = ip_pkt->ip_hdr_len * 4;
 			udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);		
-			strncpy(recv_buff + copied, (uchar *)ip_pkt + iphdrlen + 8, udphdr->length - 8);
-			copied += udphdr->length - 8;	
+			memcpy(recv_buff, (uchar *)ip_pkt + iphdrlen + 8, udphdr->length - 8);
+			recv_buff += udphdr->length - 8;
 		}
 		return EXIT_SUCCESS; 
 	} else {
@@ -167,6 +166,7 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 int UDPProcess(gpacket_t *in_pkt)
 {
 	printf("%s", "[UDPProcess]:: packet received for processing\n");
+	printUDPPacket(in_pkt);
 
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
@@ -175,8 +175,6 @@ int UDPProcess(gpacket_t *in_pkt)
 
 	// create the udp header 	
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
-
-	printf("payload: %s\n", (uchar *)ip_pkt + iphdrlen + 8);
 
 	// packet used checksum (is optional) 
 	if (udphdr->checksum != 0){
@@ -195,7 +193,7 @@ int UDPProcess(gpacket_t *in_pkt)
 	}
 
 	// buffer the packet if the buffer exists, otherwise drop the packet
-	udpprt_buff_t* buff = UDPGetPortBuffer(gNtohl(tmpbuff, ip_pkt->ip_dst), udphdr->dest);
+	udpprt_buff_t* buff = UDPGetPortBuffer(gNtohl(tmpbuff, ip_pkt->ip_dst), ~checksum((uchar *)ip_pkt + iphdrlen + 2, 1));
 	if (buff != NULL){
 		writeQueue(buff->buff, in_pkt, sizeof(in_pkt));
 		printf("[UDPProcess]:: Buffered packet... \n");
