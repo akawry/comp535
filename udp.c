@@ -115,6 +115,19 @@ int UDPReceive(uchar ip_addr[], uint16_t port, uchar* recv_buff){
 	} 
 }
 
+void printUDPPacketNew(gpacket_t *msg)
+{
+
+	ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
+	int iphdrlen = ip_pkt->ip_hdr_len * 4;
+	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	printf("\nUDP: ----- UDP Header -----\n");
+	printf("UDP: Source	: 0x%04X\n", htonl(udphdr->source))>>16;
+	printf("UDP: Dest	: 0x%04X\n", htonl(udphdr->dest))>>16;
+	printf("UDP: Length	: 0x%04x\n", htonl(udphdr->length))>>16;
+	printf("UDP: Checksum	: 0x%04X\n", htonl(udphdr->checksum))>>16;
+	printf("\n");
+}
 
 int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar* buff, int len){
 	char tmpbuf[MAX_TMPBUF_LEN];
@@ -131,8 +144,11 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
 
 	// Put header info to the gpacket
-	udphdr->dest = udp_dest_port;
-	udphdr->source = udp_src_port;
+	//udphdr->dest = udp_dest_port;
+	//udphdr->source = udp_src_port;
+	udphdr->dest = htonl(udp_dest_port)>>16;
+	udphdr->source = htonl(udp_src_port)>>16;
+
 	udphdr->checksum = 0;
 	
 	// Put IP to the gpacket (for udp checksumming)
@@ -147,16 +163,17 @@ int UDPSend(uchar dst_ip[], uint16_t udp_dest_port, uint16_t udp_src_port, uchar
 	// Looping to send packets
 	for(left_bytes = len ; left_bytes >= 0 ; left_bytes -= MAX_UDP_PAYLOAD) {
 		tmpCount = left_bytes >= MAX_UDP_PAYLOAD ? MAX_UDP_PAYLOAD : left_bytes;
-		udphdr->length = tmpCount + 8;
+		udphdr->length = htonl(tmpCount + 8)>>16;
 
 		// Put data into gpacket, and break message using if it reach the max length
 		strncpy((uchar *)udphdr + 8, buff + copied, tmpCount);
 		copied += tmpCount;
 
 		// Calculate checksum
-		udphdr->checksum = htonl(UDPChecksum(ip_pkt));
-
+		//udphdr->checksum = htonl(UDPChecksum(ip_pkt))>>16;
+		printf("Checksum is : %0x",udphdr->checksum);
 		// send the message to the IP routine to ship it out
+		printUDPPacketNew(out_pkt);
 		IPOutgoingPacket(out_pkt, dst_ip, tmpCount + 8 + iphdrlen, 1, 17);
 	}
 

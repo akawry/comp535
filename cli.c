@@ -841,7 +841,7 @@ void haltCmd()
 void udpclientCmd()
 {
 	char *next_tok = strtok(NULL, " \n");
-	int source_port, dest_port;
+	uint16_t source_port, dest_port;
 	char tmpbuf[MAX_TMPBUF_LEN];
 	uchar source_addr[4], dest_addr[4];
 
@@ -860,6 +860,7 @@ void udpclientCmd()
 
 	if (next_tok != NULL) {
 		source_port = gAtoi(next_tok);
+		next_tok = strtok(NULL, " \n");
 	} else {
 		printf("usage: udpclient ip_source source_port ip_dest dest_port \n");
 		return;
@@ -875,6 +876,7 @@ void udpclientCmd()
 
 	if (next_tok != NULL) {
 		dest_port = gAtoi(next_tok);
+		printf("dest_port:%i\n",dest_port);
 	} else {
 		printf("usage: udpclient ip_source source_port ip_dest dest_port \n");
 		return;
@@ -885,7 +887,10 @@ void udpclientCmd()
 	while(1){
 		printf("#");
 		scanf("%s", writebuf);
+		printf("[udpsend]::udp send command, dest port = %d, dest IP = %s, own port = %d, Message = %s\n",dest_port,IP2Dot(tmpbuf,dest_addr), source_port, writebuf);
+			
 		UDPSend(dest_addr, dest_port, source_port, writebuf, strlen(writebuf) + 1);
+		printf("Udpreceive::srcAddr:%s,srcPort:%i\n",IP2Dot(tmpbuf,source_addr),source_port);
 		UDPReceive(source_addr, source_port, readbuf);
 		printf("%s\n", readbuf);
 	}
@@ -956,7 +961,6 @@ void udpreceiveCmd()
 	
 	UDPReceive(ip_addr, port, messagebuf);
 	printf("[UDPReceive]:: Payload: %s\n", messagebuf);
-	printf("hello we got here\n");
 }
 
 /*
