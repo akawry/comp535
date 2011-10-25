@@ -17,19 +17,16 @@ typedef struct _tcphdr_t
 	uint32_t ack_seq;
 
 	#if BYTE_ORDER == LITTLE_ENDIAN
-	uint8_t	res:4;
+	uint8_t	res:6;
 	uint8_t off:4;
 	#endif
 
 	#if BYTE_ORDER == BIG_ENDIAN
 	uint8_t	off:4;
-	uint8_t res:4;
+	uint8_t res:6;
 	#endif
 	
 	/* Flags */
-	uint8_t ns:1;
-	uint8_t cwr:1;
-	uint8_t ece:1;
 	uint8_t urg:1;
 	uint8_t ack:1;
 	uint8_t psh:1;
@@ -47,4 +44,4 @@ typedef struct _tcphdr_t
 
 // function prototypes
 int TCPProcess(gpacket_t *in_pkt);
-
+uint16_t TCPChecksum(gpacket_t *in_pkt);
