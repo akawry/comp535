@@ -34,8 +34,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "simplequeue.h"
+#include "tcp.h"
 #include "udp.h"
-
 
 Map *cli_map;
 Mapper *cli_mapper;
@@ -55,12 +55,6 @@ extern pktcore_t *pcore;
  * The CLI registers and commands into a hash table and forks a thread to
  * handle the command line.
  */
-
-
-void udpsendCmd();
-void udpreceiveCmd();
-void udpopenCmd();
-void udpclientCmd();
 
 int CLIInit(router_config *rarg)
 {
@@ -111,7 +105,7 @@ int CLIInit(router_config *rarg)
 	registerCLI("udpreceive",udpreceiveCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("udpopen",udpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("udpclient",udpclientCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
-	
+	registerCLI("tcpopen",tcpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	
 	if (rarg->config_dir != NULL)
 		chdir(rarg->config_dir);                  // change to the configuration directory
@@ -1014,6 +1008,50 @@ void udpsendCmd()
 	UDPSend(ip_addr, port, ownPort, messagebuf, pkt_size);
 
 }
+
+void tcpopenCmd(){
+	char *next_tok = strtok(NULL, " \n");
+	int source_port, dest_port = 0;
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf;
+	uchar source_ip[4], dest_ip[4];
+
+	if (next_tok == NULL){
+		printf("usage: tcpopen ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, source_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpopen ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		source_port = gAtoi(next_tok);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpopen ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	if (next_tok != NULL){
+		Dot2IP(next_tok, dest_ip);
+		next_tok = strtok(NULL, " \n");
+	} 
+
+	if (next_tok != NULL) {
+		dest_port = gAtoi(next_tok);
+	} 
+		
+	printf("[TCPOpen]::tcp open command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf, dest_ip), dest_port);
+	
+	TCPOpen(source_ip, source_port, dest_ip, dest_port);
+}
+	
 
 /*
  * send a ping packet...

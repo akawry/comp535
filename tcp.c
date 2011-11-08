@@ -14,6 +14,18 @@
 
 tcptcb_t *active_connections = NULL;
 
+int TCPRequestConnection(tcptcb_t *con){
+
+	// set a random ISN 
+	unsigned int iseed = (unsigned int)time(NULL);
+  	srand (iseed);
+	con->tcp_ISS = rand();
+
+	printf("[TCPRequestConnection]:: Requesting a connection. Sending initial sequence number of %d\n", con->tcp_ISS);
+
+	return EXIT_FAILURE;
+}
+
 int TCPCompareSocket(tcpsocket_t *s, uchar ip[], uint16_t port){
 	if (s->tcp_port != port)
 		return 0;
@@ -36,7 +48,9 @@ tcptcb_t *TCPGetConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	tcptcb_t* cur = active_connections;
 	while (cur != NULL){
 		if (TCPCompareSocket(cur->tcp_source, src_ip, src_port)){
-			if (TCPIsPassive(cur->tcp_dest) || TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port))
+
+			// allow multiple passive OPENs
+			if (!TCPIsPassive(cur->tcp_dest) && TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port))
 				return cur;
 		}
 		cur = cur->next;
@@ -65,6 +79,7 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	con->tcp_source = TCPNewSocket(src_ip, src_port);
 	con->tcp_dest = TCPNewSocket(dest_ip, dest_port);
 	con->next = NULL;
+	
 	return con;
 }
 
@@ -78,6 +93,15 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 			tcptcb_t* cur = active_connections;
 			while (cur->next != NULL) cur = cur->next;
 			cur->next = tcp_conn;
+		}
+
+
+		// passive OPEN, so listen for requests
+		if (TCPIsPassive(tcp_conn->tcp_dest)){
+			tcp_conn->tcp_state = TCP_LISTEN;
+		// active OPEN, send out the request to the destination
+		} else {
+			TCPRequestConnection(tcp_conn);
 		}
 	}
 	return tcp_conn;
