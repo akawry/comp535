@@ -40,8 +40,21 @@ typedef struct _tcphdr_t
   
 } tcphdr_t;
 
-#endif
+typedef struct _tcpsocket_t
+{
+	uint16_t tcp_port;
+	uchar tcp_ip[4];
+} tcpsocket_t;
+
+typedef struct _tcptcb_t
+{
+	tcpsocket_t *tcp_source;
+	tcpsocket_t *tcp_dest;
+	struct tcptcb_t *next; // linked list
+} tcptcb_t;
 
 // function prototypes
 int TCPProcess(gpacket_t *in_pkt);
 uint16_t TCPChecksum(gpacket_t *in_pkt);
+
+#endif
