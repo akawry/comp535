@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include "message.h"
 
-#define TCP_HEADER_LENGTH 160
+#define TCP_HEADER_LENGTH 20
 
 typedef struct _tcphdr_t 
 {
@@ -28,12 +28,12 @@ typedef struct _tcphdr_t
 	#endif
 	
 	/* Flags */
-	uint8_t urg:1;
-	uint8_t ack:1;
-	uint8_t psh:1;
-	uint8_t rst:1;
-	uint8_t syn:1;
-	uint8_t fin:1;
+	uint8_t URG:1;
+	uint8_t ACK:1;
+	uint8_t PSH:1;
+	uint8_t RST:1;
+	uint8_t SYN:1;
+	uint8_t FIN:1;
 
 	uint16_t win_size;
 	uint16_t checksum;
@@ -47,16 +47,16 @@ typedef struct _tcpsocket_t
 	uchar tcp_ip[4];
 } tcpsocket_t;
 
-#define TCP_LISTEN 1;
-#define TCP_SYN_SENT 2; 
-#define TCP_SYN_RECEIVED 3;
-#define TCP_ESTABLISHED 4;
-#define TCP_FIN_WAIT_1 5;
-#define TCP_FIN_WAIT_2 6; 
-#define TCP_CLOSE_WAIT 7;
-#define TCP_CLOSING 8;
-#define TCP_LAST_ACK 9;
-#define TCP_TIME_WAIT 10;
+#define TCP_LISTEN 1
+#define TCP_SYN_SENT 2 
+#define TCP_SYN_RECEIVED 3
+#define TCP_ESTABLISHED 4
+#define TCP_FIN_WAIT_1 5
+#define TCP_FIN_WAIT_2 6 
+#define TCP_CLOSE_WAIT 7
+#define TCP_CLOSING 8
+#define TCP_LAST_ACK 9
+#define TCP_TIME_WAIT 10
 
 typedef struct _tcptcb_t
 {

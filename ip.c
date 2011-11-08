@@ -381,8 +381,6 @@ int IPOutgoingPacket(gpacket_t *pkt, uchar *dst_ip, int size, int newflag, int s
 
 		COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, dst_ip));
 		ip_pkt->ip_pkt_len = htons(size + ip_pkt->ip_hdr_len * 4);
-
-
 		verbose(2, "[IPOutgoingPacket]:: lookup next hop ");
 		// find the nexthop and interface and fill them in the "meta" frame
 		// NOTE: the packet itself is not modified by this lookup!

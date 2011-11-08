@@ -24,20 +24,20 @@ void TCPPrintPacket(gpacket_t *msg)
 	printf("TCP: Source	: %d\n", tcphdr->sport);
 	printf("TCP: Dest	: %d\n", tcphdr->dport);
 	printf("TCP: Seq	: %d\n", tcphdr->seq);
-	printf("TCP: SYN	: %d\n", tcphdr->syn);
+	printf("TCP: SYN	: %d\n", tcphdr->SYN);
+	printf("TCP: ACK	: %d\n", tcphdr->ACK);
 	printf("TCP: Checksum	: %02X\n", tcphdr->checksum);
 	printf("\n");
 }
 
-int TCPRequestConnection(tcptcb_t *con){
+tcphdr_t *TCPHeader(gpacket_t *out_pkt){
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = 20;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	return tcphdr;
+}
 
-	// set a random ISN 
-	unsigned int iseed = (unsigned int)time(NULL);
-  	srand (iseed);
-	con->tcp_ISS = rand();
-
-	printf("[TCPRequestConnection]:: Requesting a connection. Sending initial sequence number of %d\n", con->tcp_ISS);
-
+gpacket_t *TCPNewPacket(tcptcb_t* con){
 	// allocate the IP packet 
 	char tmpbuf[MAX_TMPBUF_LEN];
 	gpacket_t *out_pkt = (gpacket_t *) malloc(sizeof(gpacket_t));
@@ -48,24 +48,86 @@ int TCPRequestConnection(tcptcb_t *con){
 	
 	//create the tcp header 
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
-	tcphdr->seq = con->tcp_ISS;
-	tcphdr->syn = (uint8_t)1;
 	tcphdr->dport = (con->tcp_dest)->tcp_port;
 	tcphdr->sport = (con->tcp_source)->tcp_port;
 
-	printf("%d, %d\n", (con->tcp_dest)->tcp_port, (con->tcp_source)->tcp_port);
-	
 	// Put IP to the gpacket (for tcp checksumming)
 	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, (con->tcp_dest)->tcp_ip));
 	COPY_IP(ip_pkt->ip_src, gHtonl(tmpbuf, (con->tcp_source)->tcp_ip));
 
+	return out_pkt;
+}
+
+int TCPRequestConnection(tcptcb_t *con){
+	
+	printf("[TCPRequestConnection]:: Requesting a connection.\n");
+
+	gpacket_t *out_pkt = TCPNewPacket(con);
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = 20;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+
+	// set a random ISN 
+	unsigned int iseed = (unsigned int)time(NULL);
+  	srand (iseed);
+	con->tcp_ISS = rand();
+	
+	tcphdr->seq = con->tcp_ISS;
+	tcphdr->SYN = (uint8_t)1;
+	ip_pkt->ip_pkt_len = iphdrlen + TCP_HEADER_LENGTH;
 	tcphdr->checksum = TCPChecksum(out_pkt);
 	
 	// for debugging, show the outgoing packet
 	TCPPrintPacket(out_pkt);
 
 	// send the pakcet to the ip module for further processing 	
-	return IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success)
+		con->tcp_state = TCP_SYN_SENT;
+	return success;
+}
+
+int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con, int sent_first){
+	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request.\n");
+	
+	int iphdrlen = 20;
+
+	// if the dest was a wildcard, update new dest accordingly
+	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
+	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
+
+	int i;
+	for (i = 0; i < 4; i++) (con->tcp_dest)->tcp_ip[i] = ip_pkt_in->ip_src[i];
+	(con->tcp_dest)->tcp_port = tcphdr_in->sport;
+
+	// create a response 
+	gpacket_t *out_pkt = TCPNewPacket(con);
+	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
+	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
+
+	// set a random ISN for my sequence number
+	unsigned int iseed = (unsigned int)time(NULL);
+  	srand (iseed);
+	con->tcp_ISS = rand();
+	con->tcp_IRS = tcphdr_in->seq;
+	con->tcp_state = TCP_SYN_RECEIVED;	
+
+	tcphdr_out->seq = con->tcp_ISS;
+	tcphdr_out->ack_seq = tcphdr_in->seq+1;
+	tcphdr_out->SYN = (uint8_t)1;
+	tcphdr_out->ACK = (uint8_t)1;	
+	ip_pkt_out->ip_pkt_len = iphdrlen + TCP_HEADER_LENGTH;
+	
+	// for debugging, show the outgoing packet
+	TCPPrintPacket(out_pkt);
+
+	int success = IPOutgoingPacket(out_pkt, ip_pkt_out->ip_dst, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS)
+		printf("[TCPAcknowledgeConnectionRequest]:: Sent out ACK\n");
+	else
+		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
+
+	return success;
 }
 
 int TCPCompareSocket(tcpsocket_t *s, uchar ip[], uint16_t port){
@@ -82,7 +144,8 @@ int TCPIsPassive(tcpsocket_t *s){
 		return 0;
 	int i;
 	for (i = 0; i < 4; i++)
-		if (s->tcp_ip[i] != '0') return 0;
+		if (s->tcp_ip[i] != 0) return 0;
+
 	return 1;
 }
 
@@ -91,9 +154,16 @@ tcptcb_t *TCPGetConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	while (cur != NULL){
 		if (TCPCompareSocket(cur->tcp_source, src_ip, src_port)){
 
-			// allow multiple passive OPENs
-			if (!TCPIsPassive(cur->tcp_dest) && TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port))
-				return cur;
+			// have a socket passively waiting and still in the listen state 
+			if (TCPIsPassive(cur->tcp_dest)){
+				if (cur->tcp_state == TCP_LISTEN)
+					return cur;
+
+			// have a socket waiting with exact destination socket
+			} else {
+				if (TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port))
+					return cur;
+			}
 		}
 		cur = cur->next;
 	}
@@ -101,6 +171,7 @@ tcptcb_t *TCPGetConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 }
 
 tcpsocket_t *TCPNewSocket(uchar ip[], uint16_t port){
+
 	tcpsocket_t* socket;
 	if ((socket = (tcpsocket_t *)malloc(sizeof(tcpsocket_t))) == NULL){
 		printf("[TCPNewSocket]:: Not enough room for socket\n");
@@ -139,7 +210,10 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 
 		// passive OPEN, so listen for requests
 		if (TCPIsPassive(tcp_conn->tcp_dest)){
+
+			printf("[TCPOpen]:: Was a passive OPEN ... start listening ... \n");
 			tcp_conn->tcp_state = TCP_LISTEN;
+
 		// active OPEN, send out the request to the destination
 		} else {
 			TCPRequestConnection(tcp_conn);
@@ -152,17 +226,47 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
 	TCPPrintPacket(in_pkt);
+
+	uchar tmpbuff[MAX_TMPBUF_LEN];
+
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
 
 	// create the tcp header 	
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
-	tcphdr->checksum = 0;
+	
+	/* 
+	 * BEGIN STATE MACHINE HERE
+	 */
+
+	// request for open 
+	if (tcphdr->SYN == 1){
+
+		// first part of handshake
+		if (tcphdr->ACK == 0){
+			tcptcb_t* conn = TCPGetConnection(gNtohl(tmpbuff, ip_pkt->ip_dst), tcphdr->dport, gNtohl(tmpbuff, ip_pkt->ip_src), tcphdr->sport);
+			
+			// no TCB's waiting for where the packet came from 
+			if (conn == NULL)
+				printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
+			else 
+				TCPAcknowledgeConnectionRequest(in_pkt, conn, 0);
+
+		// second part of handshake 
+		} else if (tcphdr->ACK == 1){
+			
+			printf("second part of handshake\n");
+
+		}
+
+	}
+	
+	/*tcphdr->checksum = 0;
 	int checksum = TCPChecksum(in_pkt);
 	if (checksum){
-		printf("[TCPProcess]:: Checksum error! Dropping packet ...\n");
-	}
+		printf("[TCPProcess]:: Checksum error! Dropping packet ...%02X\n", checksum);
+	}*/
 	return EXIT_FAILURE;
 }
 
