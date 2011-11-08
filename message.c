@@ -8,6 +8,7 @@
 #include "protocols.h"
 #include "ip.h"
 #include "udp.h"
+#include "tcp.h"
 #include "arp.h"
 
 
@@ -199,8 +200,20 @@ void printUDPPacket(gpacket_t *msg)
 }
 
 
+
 void printTCPPacket(gpacket_t *msg)
 {
 
-	printf("\n TCP PACKET display NOT YET IMPLEMENTED !! \n");
+	ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
+	int iphdrlen = 20;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	printf("\nTCP: ----- TCP Header -----\n");
+	printf("TCP: Source	: %d\n", tcphdr->sport);
+	printf("TCP: Dest	: %d\n", tcphdr->dport);
+	printf("TCP: Seq	: %d\n", tcphdr->seq);
+	printf("TCP: Ack Seq	: %d\n", tcphdr->ack_seq);
+	printf("TCP: SYN	: %d\n", tcphdr->SYN);
+	printf("TCP: ACK	: %d\n", tcphdr->ACK);
+	printf("TCP: Checksum	: %02X\n", tcphdr->checksum);
+	printf("\n");
 }

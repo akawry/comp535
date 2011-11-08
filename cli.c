@@ -1041,19 +1041,15 @@ void tcpopenCmd(){
 	if (next_tok != NULL){
 		Dot2IP(next_tok, dest_ip);
 		next_tok = strtok(NULL, " \n");
+		if (next_tok != NULL) {
+			dest_port = gAtoi(next_tok);
+		} 
 	} else {
 		printf("Using 0.0.0.0 as dest_ip for wildcard\n");
 		Dot2IP("0.0.0.0", dest_ip);
-	} 
-
-	if (next_tok != NULL) {
-		dest_port = gAtoi(next_tok);
-	} else {
-		printf("Using port 0 for wildcard\n");
-		dest_port = 0;
-	} 
+	}
 		
-	printf("[TCPOpen]::tcp open command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf, dest_ip), dest_port);
+	printf("[TCPOpen]::tcp open command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
 	
 	TCPOpen(source_ip, source_port, dest_ip, dest_port);
 }

@@ -366,9 +366,6 @@ int IPOutgoingPacket(gpacket_t *pkt, uchar *dst_ip, int size, int newflag, int s
 	} else if (newflag == 1)
 	{
 
-		
-		
-
 		// non REPLY PACKET -- this is a new packet; set all fields
 		ip_pkt->ip_version = 4;
 		ip_pkt->ip_hdr_len = 5;
