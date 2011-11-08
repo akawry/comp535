@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "message.h"
 
+#define TCP_HEADER_LENGTH 160
 
 typedef struct _tcphdr_t 
 {

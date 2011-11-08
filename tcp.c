@@ -14,6 +14,21 @@
 
 tcptcb_t *active_connections = NULL;
 
+void TCPPrintPacket(gpacket_t *msg)
+{
+
+	ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
+	int iphdrlen = 20;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	printf("\nTCP: ----- TCP Header -----\n");
+	printf("TCP: Source	: %d\n", tcphdr->sport);
+	printf("TCP: Dest	: %d\n", tcphdr->dport);
+	printf("TCP: Seq	: %d\n", tcphdr->seq);
+	printf("TCP: SYN	: %d\n", tcphdr->syn);
+	printf("TCP: Checksum	: %02X\n", tcphdr->checksum);
+	printf("\n");
+}
+
 int TCPRequestConnection(tcptcb_t *con){
 
 	// set a random ISN 
@@ -23,7 +38,34 @@ int TCPRequestConnection(tcptcb_t *con){
 
 	printf("[TCPRequestConnection]:: Requesting a connection. Sending initial sequence number of %d\n", con->tcp_ISS);
 
-	return EXIT_FAILURE;
+	// allocate the IP packet 
+	char tmpbuf[MAX_TMPBUF_LEN];
+	gpacket_t *out_pkt = (gpacket_t *) malloc(sizeof(gpacket_t));
+	
+	//extract the ip packet header and header length
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = 20;
+	
+	//create the tcp header 
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	tcphdr->seq = con->tcp_ISS;
+	tcphdr->syn = (uint8_t)1;
+	tcphdr->dport = (con->tcp_dest)->tcp_port;
+	tcphdr->sport = (con->tcp_source)->tcp_port;
+
+	printf("%d, %d\n", (con->tcp_dest)->tcp_port, (con->tcp_source)->tcp_port);
+	
+	// Put IP to the gpacket (for tcp checksumming)
+	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, (con->tcp_dest)->tcp_ip));
+	COPY_IP(ip_pkt->ip_src, gHtonl(tmpbuf, (con->tcp_source)->tcp_ip));
+
+	tcphdr->checksum = TCPChecksum(out_pkt);
+	
+	// for debugging, show the outgoing packet
+	TCPPrintPacket(out_pkt);
+
+	// send the pakcet to the ip module for further processing 	
+	return IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 }
 
 int TCPCompareSocket(tcpsocket_t *s, uchar ip[], uint16_t port){
@@ -95,7 +137,6 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 			cur->next = tcp_conn;
 		}
 
-
 		// passive OPEN, so listen for requests
 		if (TCPIsPassive(tcp_conn->tcp_dest)){
 			tcp_conn->tcp_state = TCP_LISTEN;
@@ -110,7 +151,7 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
-
+	TCPPrintPacket(in_pkt);
 	// extract the packet 	
 	ip_packet_t *ip_pkt = (ip_packet_t *)in_pkt->data.data;
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
