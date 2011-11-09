@@ -98,6 +98,7 @@ typedef struct _tcptcb_t
 } tcptcb_t;
 
 // function prototypes
+tcptcb_t *TCPRemoveConnection(tcptcb_t *conn);
 void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 int TCPProcess(gpacket_t *in_pkt);

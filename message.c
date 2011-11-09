@@ -214,6 +214,7 @@ void printTCPPacket(gpacket_t *msg)
 	printf("TCP: Ack Seq	: %d\n", tcphdr->ack_seq);
 	printf("TCP: SYN	: %d\n", tcphdr->SYN);
 	printf("TCP: ACK	: %d\n", tcphdr->ACK);
+	printf("TCP: FIN	: %d\n", tcphdr->FIN);
 	printf("TCP: Checksum	: %02X\n", tcphdr->checksum);
 	printf("\n");
 }

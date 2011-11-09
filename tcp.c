@@ -50,7 +50,78 @@ int TCPRequestClose(tcptcb_t *con){
 	int iphdrlen = 20;
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
 	
-	return EXIT_FAILURE;
+	tcphdr->ACK = (uint8_t)1;
+	tcphdr->FIN = (uint8_t)1;
+	ip_pkt->ip_pkt_len = iphdrlen + TCP_HEADER_LENGTH;
+	tcphdr->checksum = TCPChecksum(out_pkt);
+
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS){
+		printf("[TCPRequestClose]:: Sent out the following request: \n");
+		printTCPPacket(out_pkt);
+		con->tcp_state = TCP_FIN_WAIT_1;
+	} else {
+		printf("[TCPRequestClose]:: Failed to send out close request!\n");
+	}
+		
+
+	return success;
+}
+
+int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
+
+	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging close request.\n");
+
+	int iphdrlen = 20;
+	int next_state;	
+	int do_send = 0;
+	uint8_t fin = 0;
+
+	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
+	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
+
+	if (conn->tcp_state == TCP_ESTABLISHED){
+		next_state = TCP_CLOSE_WAIT;
+		do_send = 1;
+		//TODO: timer til send last ack
+
+	} else if (conn->tcp_state == TCP_FIN_WAIT_1){
+		next_state = TCP_FIN_WAIT_2;
+	} else if (conn->tcp_state == TCP_FIN_WAIT_2 && tcphdr_in->FIN == 1){
+		next_state = TCP_TIME_WAIT;
+		do_send = 1;
+		//TODO: timer til the connection is really closed 
+
+	} else if (conn->tcp_state == TCP_LAST_ACK && tcphdr_in->FIN == 1){
+		TCPRemoveConnection(conn);
+		do_send = 1;
+		fin = (uint8_t)1;
+	}
+
+	if (do_send){
+		
+		gpacket_t *out_pkt = TCPNewPacket(conn);
+		ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
+		tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
+
+		tcphdr_out->seq = tcphdr_in->ack_seq;
+		tcphdr_out->ack_seq = tcphdr_in->seq + 1;
+		tcphdr_out->ACK = (uint8_t)1;
+		tcphdr_out->FIN = fin;
+	
+		int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+		if (success == EXIT_SUCCESS){
+			printf("[TCPAcknowledgeCloseRequest]:: Sent out the following request: \n");
+			printTCPPacket(out_pkt);
+			conn->tcp_state = next_state;
+		} else {
+			printf("[TCPAcknowledgeCloseRequest]:: Failed to send out close request!\n");
+		}
+		
+		return success;
+	}
+	
+	return EXIT_SUCCESS;
 }
 
 int TCPRequestConnection(tcptcb_t *con){
@@ -106,7 +177,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 
 	// set a random ISN for my sequence number
-	if (tcphdr_in->ACK == 0){
+	if (con->tcp_state == TCP_TIME_WAIT){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 	  	srand (tcphdr_in->seq);
 		con->tcp_ISS = rand();
@@ -116,12 +187,11 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		tcphdr_out->SYN = (uint8_t)1;
 
 	// third phase of handshake 
-	} else if (tcphdr_in->ACK == 1){
+	} else if (con->tcp_state == TCP_SYN_RECEIVED){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		con->tcp_state = TCP_ESTABLISHED;
 		tcphdr_out->seq = con->tcp_ISS + 1;
 		tcphdr_out->ack_seq = tcphdr_in->seq + 1;
-		tcphdr_out->SYN = (uint8_t)0;
 	}
 	tcphdr_out->ACK = (uint8_t)1;
 	con->tcp_IRS = tcphdr_in->seq;
@@ -316,15 +386,17 @@ int TCPProcess(gpacket_t *in_pkt){
 	if (tcphdr->SYN == 1){
 		TCPAcknowledgeConnectionRequest(in_pkt, conn);
 	
-	} else {
-		
-		if (tcphdr->ACK == 1){
+	// request for close
+	} else if (tcphdr->FIN == 1){
+		TCPAcknowledgeCloseRequest(in_pkt, conn);
 
-			// final ACK for handshake 
-			if (conn->tcp_state == TCP_SYN_RECEIVED){
-				conn->tcp_state = TCP_ESTABLISHED;
-				printf("[TCPProcess]:: Connection fully established ... \n");
-			}
+	// regular data segment or ack
+	} else if (tcphdr->ACK == 1){
+
+		// final ACK for handshake 
+		if (conn->tcp_state == TCP_SYN_RECEIVED){
+			conn->tcp_state = TCP_ESTABLISHED;
+			printf("[TCPProcess]:: Connection fully established ... \n");
 		}
 
 	}		
