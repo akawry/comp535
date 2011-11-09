@@ -11,6 +11,7 @@
 
 #define TCP_MSL 10
 #define TCP_HEADER_LENGTH 20
+#define TCP_MAX_WIN_SIZE 100
 
 typedef struct _tcphdr_t 
 {
@@ -96,7 +97,8 @@ typedef struct _tcptcb_t
       	uint16_t tcp_SEG_WND; //  segment window
       	uint16_t tcp_SEG_UP;  //  segment urgent pointer
 
-	
+	char rcv_buff[TCP_MAX_WIN_SIZE];	//receive buffer 
+	char send_buff[TCP_MAX_WIN_SIZE];	//send buffer 	
 
 	struct tcptcb_t *next; // linked list
 } tcptcb_t;

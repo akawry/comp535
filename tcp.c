@@ -13,6 +13,8 @@
 #include <string.h>
 
 tcptcb_t *active_connections = NULL;
+tcphdr_t *receive_buffer[TCP_MAX_WIN_SIZE];
+int next = 0;
 
 void TCPPrintTCB(tcptcb_t *tcb){
 	char tmpbuf[MAX_TMPBUF_LEN];
@@ -34,6 +36,8 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
 	tcphdr->dport = (con->tcp_dest)->tcp_port;
 	tcphdr->sport = (con->tcp_source)->tcp_port;
+	char test[] = "Hello world\n";
+	memcpy((uchar *)tcphdr + TCP_HEADER_LENGTH, test, strlen(test)+1);
 
 	// Put IP to the gpacket (for tcp checksumming)
 	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, (con->tcp_dest)->tcp_ip));
@@ -212,7 +216,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		tcphdr_out->SYN = (uint8_t)1;
 
 	// third phase of handshake 
-	} else if (con->tcp_state == TCP_SYN_RECEIVED){
+	} else if (con->tcp_state == TCP_SYN_SENT){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		next_state = TCP_ESTABLISHED;
 		tcphdr_out->seq = con->tcp_ISS + 1;
@@ -386,7 +390,7 @@ void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_
 
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
-	printTCPPacket(in_pkt);
+	//printTCPPacket(in_pkt);
 
 	uchar tmpbuff[MAX_TMPBUF_LEN];
 
@@ -401,7 +405,7 @@ int TCPProcess(gpacket_t *in_pkt){
 	 * BEGIN STATE MACHINE HERE
 	 */
 	tcptcb_t* conn = TCPGetConnection(gNtohl(tmpbuff, ip_pkt->ip_dst), tcphdr->dport, gNtohl(tmpbuff+20, ip_pkt->ip_src), tcphdr->sport);
-	
+		
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
 		printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
@@ -423,8 +427,12 @@ int TCPProcess(gpacket_t *in_pkt){
 		if (conn->tcp_state == TCP_SYN_RECEIVED){
 			conn->tcp_state = TCP_ESTABLISHED;
 			printf("[TCPProcess]:: Connection fully established ... \n");
+
+		// first ack for initiated close 
 		} else if (conn->tcp_state == TCP_FIN_WAIT_1){
 			conn->tcp_state = TCP_FIN_WAIT_2;
+
+		// waiting for final ack to close 
 		} else if (conn->tcp_state == TCP_LAST_ACK){
 			printf("[TCPProcess]:: Terminating connection ... \n");
 			TCPRemoveConnection(conn);
@@ -488,3 +496,4 @@ uint16_t TCPChecksum(gpacket_t *in_pkt) {
 	
 	return ((uint16_t)sum);
 }
+
