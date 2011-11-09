@@ -68,60 +68,84 @@ int TCPRequestClose(tcptcb_t *con){
 	return success;
 }
 
+void TCPSendLastAck(int sig){
+	printf("[TCPSendLastAck]:: Sending all final acknowledgements ... \n");
+	tcptcb_t *cur = active_connections;
+	while (cur != NULL){
+		if (cur->tcp_state == TCP_CLOSE_WAIT){
+			printf("[TCPSendLastAck]:: Sending last ACK for ");
+			TCPPrintTCB(cur);
+
+			int iphdrlen = 20;
+			gpacket_t *out_pkt = TCPNewPacket(cur);
+			ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
+			tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
+			tcphdr_out->FIN = (uint8_t)1;
+			tcphdr_out->ACK = (uint8_t)1;
+			IPOutgoingPacket(out_pkt, (cur->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+			
+			cur->tcp_state = TCP_LAST_ACK;
+		}
+		cur = cur->next;
+	}
+}
+
+
+void TCPCloseWaiting(int sig){
+	printf("[TCPCloseWaiting]:: Closing all waiting connections ... \n");
+	tcptcb_t *cur = active_connections;
+	while (cur != NULL){
+		if (cur->tcp_state == TCP_TIME_WAIT){
+			printf("[TCPCloseWaiting]:: Closing ");
+			TCPPrintTCB(cur);
+			cur = TCPRemoveConnection(cur);
+		} else {
+			cur = cur->next;
+		}
+	}
+}
+
 int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 
-	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging close request.\n");
+	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
 
 	int iphdrlen = 20;
 	int next_state;	
-	int do_send = 0;
-	uint8_t fin = 0;
 
 	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
 	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
 
 	if (conn->tcp_state == TCP_ESTABLISHED){
 		next_state = TCP_CLOSE_WAIT;
-		do_send = 1;
-		//TODO: timer til send last ack
 
-	} else if (conn->tcp_state == TCP_FIN_WAIT_1){
-		next_state = TCP_FIN_WAIT_2;
-	} else if (conn->tcp_state == TCP_FIN_WAIT_2 && tcphdr_in->FIN == 1){
+		signal (SIGALRM, TCPSendLastAck);
+       		alarm (2);
+
+	} else if (conn->tcp_state == TCP_FIN_WAIT_2){
 		next_state = TCP_TIME_WAIT;
-		do_send = 1;
-		//TODO: timer til the connection is really closed 
 
-	} else if (conn->tcp_state == TCP_LAST_ACK && tcphdr_in->FIN == 1){
-		TCPRemoveConnection(conn);
-		do_send = 1;
-		fin = (uint8_t)1;
+		signal(SIGALRM, TCPCloseWaiting);
+		alarm (TCP_MSL);
 	}
 
-	if (do_send){
-		
-		gpacket_t *out_pkt = TCPNewPacket(conn);
-		ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
-		tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
+	gpacket_t *out_pkt = TCPNewPacket(conn);
+	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
+	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 
-		tcphdr_out->seq = tcphdr_in->ack_seq;
-		tcphdr_out->ack_seq = tcphdr_in->seq + 1;
-		tcphdr_out->ACK = (uint8_t)1;
-		tcphdr_out->FIN = fin;
-	
-		int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
-		if (success == EXIT_SUCCESS){
-			printf("[TCPAcknowledgeCloseRequest]:: Sent out the following request: \n");
-			printTCPPacket(out_pkt);
-			conn->tcp_state = next_state;
-		} else {
-			printf("[TCPAcknowledgeCloseRequest]:: Failed to send out close request!\n");
-		}
-		
-		return success;
+	tcphdr_out->seq = tcphdr_in->ack_seq;
+	tcphdr_out->ack_seq = tcphdr_in->seq + 1;
+	tcphdr_out->ACK = (uint8_t)1;
+
+	int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS){
+		printf("[TCPAcknowledgeCloseRequest]:: Updated state: %d. Sent out the following request: \n", next_state);
+		printTCPPacket(out_pkt);
+		conn->tcp_state = next_state;
+	} else {
+		printf("[TCPAcknowledgeCloseRequest]:: Failed to send out close request!\n");
 	}
 	
-	return EXIT_SUCCESS;
+	return success;
 }
 
 int TCPRequestConnection(tcptcb_t *con){
@@ -161,7 +185,8 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 
 	int iphdrlen = 20;
 	char tmpbuf[MAX_TMPBUF_LEN];
-	
+	int next_state;	
+
 	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
 	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
 
@@ -181,7 +206,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 	  	srand (tcphdr_in->seq);
 		con->tcp_ISS = rand();
-		con->tcp_state = TCP_SYN_RECEIVED;	
+		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = con->tcp_ISS;
 		tcphdr_out->ack_seq = tcphdr_in->seq+1;
 		tcphdr_out->SYN = (uint8_t)1;
@@ -189,7 +214,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_RECEIVED){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
-		con->tcp_state = TCP_ESTABLISHED;
+		next_state = TCP_ESTABLISHED;
 		tcphdr_out->seq = con->tcp_ISS + 1;
 		tcphdr_out->ack_seq = tcphdr_in->seq + 1;
 	}
@@ -200,6 +225,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
+		con->tcp_state = next_state;
 		printTCPPacket(out_pkt);
 	} else {
 		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
@@ -397,6 +423,11 @@ int TCPProcess(gpacket_t *in_pkt){
 		if (conn->tcp_state == TCP_SYN_RECEIVED){
 			conn->tcp_state = TCP_ESTABLISHED;
 			printf("[TCPProcess]:: Connection fully established ... \n");
+		} else if (conn->tcp_state == TCP_FIN_WAIT_1){
+			conn->tcp_state = TCP_FIN_WAIT_2;
+		} else if (conn->tcp_state == TCP_LAST_ACK){
+			printf("[TCPProcess]:: Terminating connection ... \n");
+			TCPRemoveConnection(conn);
 		}
 
 	}		

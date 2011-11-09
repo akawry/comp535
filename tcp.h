@@ -7,7 +7,9 @@
 
 #include <stdint.h>
 #include "message.h"
+#include "simplequeue.h"
 
+#define TCP_MSL 10
 #define TCP_HEADER_LENGTH 20
 
 typedef struct _tcphdr_t 
@@ -94,10 +96,14 @@ typedef struct _tcptcb_t
       	uint16_t tcp_SEG_WND; //  segment window
       	uint16_t tcp_SEG_UP;  //  segment urgent pointer
 
+	
+
 	struct tcptcb_t *next; // linked list
 } tcptcb_t;
 
 // function prototypes
+void TCPSendLastAck(int sig);
+void TCPCloseWaiting(int sig);
 tcptcb_t *TCPRemoveConnection(tcptcb_t *conn);
 void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
