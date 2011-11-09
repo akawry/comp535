@@ -177,7 +177,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 
 	// set a random ISN for my sequence number
-	if (con->tcp_state == TCP_TIME_WAIT){
+	if (con->tcp_state == TCP_LISTEN){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 	  	srand (tcphdr_in->seq);
 		con->tcp_ISS = rand();
