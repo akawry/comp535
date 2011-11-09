@@ -42,6 +42,17 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	return out_pkt;
 }
 
+int TCPRequestClose(tcptcb_t *con){
+	printf("[TCPRequestClose]:: Requesting a close.\n");
+
+	gpacket_t *out_pkt = TCPNewPacket(con);
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	int iphdrlen = 20;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	
+	return EXIT_FAILURE;
+}
+
 int TCPRequestConnection(tcptcb_t *con){
 	
 	printf("[TCPRequestConnection]:: Requesting a connection.\n");
@@ -64,7 +75,8 @@ int TCPRequestConnection(tcptcb_t *con){
 	// send the pakcet to the ip module for further processing 	
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPRequestConnection]:: Sent out request.\n");
+		printf("[TCPRequestConnection]:: Sent out following request:\n");
+		printTCPPacket(out_pkt);
 		con->tcp_state = TCP_SYN_SENT;
 	} else {
 		printf("[TCPRequestConnection]:: Failed to send request!\n");
@@ -96,8 +108,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	// set a random ISN for my sequence number
 	if (tcphdr_in->ACK == 0){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
-		unsigned int iseed = (unsigned int)time(NULL);
-	  	srand (iseed);
+	  	srand (tcphdr_in->seq);
 		con->tcp_ISS = rand();
 		con->tcp_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = con->tcp_ISS;
@@ -117,10 +128,12 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	ip_pkt_out->ip_pkt_len = iphdrlen + TCP_HEADER_LENGTH;
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
-	if (success == EXIT_SUCCESS)
-		printf("[TCPAcknowledgeConnectionRequest]:: Sent out ACK\n");
-	else
+	if (success == EXIT_SUCCESS){
+		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
+		printTCPPacket(out_pkt);
+	} else {
 		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
+	}
 
 	return success;
 }
@@ -183,6 +196,7 @@ tcpsocket_t *TCPNewSocket(uchar ip[], uint16_t port){
 }
 
 tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+	printf("[TCPNewConnection]:: Allocating new connection struct\n");
 	tcptcb_t *con;
 	if ((con = (tcptcb_t *)malloc(sizeof(tcptcb_t))) == NULL){
 		printf("[TCPNewConnection]:: Not enough room for connection\n");
@@ -195,7 +209,30 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	return con;
 }
 
-tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+tcptcb_t *TCPRemoveConnection(tcptcb_t *conn){
+	if (active_connections != NULL){
+		if (active_connections == conn){
+			active_connections = active_connections->next;
+			return active_connections;
+		} else {
+			tcptcb_t *prev;
+			tcptcb_t *cur = active_connections;
+			while (cur != NULL){
+				if (cur == conn){
+					prev->next = cur->next;
+					free(cur);
+					return prev->next;				
+				} else {
+					prev = cur;
+					cur = cur->next;
+				}
+			}
+		}
+	}
+	return NULL;
+}
+
+void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 
 	tcptcb_t *tcp_conn = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	if (tcp_conn == NULL){
@@ -219,7 +256,35 @@ tcpsocket_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_
 			TCPRequestConnection(tcp_conn);
 		}
 	}
-	return tcp_conn;
+}
+
+void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+
+	tcpsocket_t* dest = TCPNewSocket(dest_ip, dest_port);
+
+	tcptcb_t* cur = active_connections;
+	if (cur == NULL){
+		printf("[TCPClose]:: Dont have any connections to close!\n");
+	}
+	while (cur != NULL){
+
+		if (TCPCompareSocket(cur->tcp_source, src_ip, src_port)){
+
+			// have a socket passively waiting and still in the listen state 
+			if (TCPIsPassive(cur->tcp_dest)){
+				printf("[TCPClose]:: Closing connection: ");
+				TCPPrintTCB(cur);
+				cur = TCPRemoveConnection(cur);
+				
+			// have a socket waiting with exact destination socket
+			} else if (TCPIsPassive(dest) || TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port)) {
+				TCPRequestClose(cur);
+				cur = cur->next;
+			} else {
+				cur = cur->next;
+			}
+		}
+	}
 }
 		
 

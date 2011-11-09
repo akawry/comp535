@@ -98,6 +98,8 @@ typedef struct _tcptcb_t
 } tcptcb_t;
 
 // function prototypes
+void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
+void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 int TCPProcess(gpacket_t *in_pkt);
 uint16_t TCPChecksum(gpacket_t *in_pkt);
 

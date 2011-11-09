@@ -119,7 +119,7 @@ void printUDPPacketNew(gpacket_t *msg)
 {
 
 	ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
-	int iphdrlen = ip_pkt->ip_hdr_len * 4;
+	int iphdrlen = 20;
 	udphdr_t *udphdr = (udphdr_t *)((uchar *)ip_pkt + iphdrlen);
 	printf("\nUDP: ----- UDP Header -----\n");
 	printf("UDP: Source	: 0x%04X\n", htonl(udphdr->source))>>16;

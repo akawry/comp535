@@ -106,6 +106,7 @@ int CLIInit(router_config *rarg)
 	registerCLI("udpopen",udpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("udpclient",udpclientCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("tcpopen",tcpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
+	registerCLI("tcpclose",tcpcloseCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	
 	if (rarg->config_dir != NULL)
 		chdir(rarg->config_dir);                  // change to the configuration directory
@@ -1045,13 +1046,56 @@ void tcpopenCmd(){
 			dest_port = gAtoi(next_tok);
 		} 
 	} else {
-		printf("Using 0.0.0.0 as dest_ip for wildcard\n");
 		Dot2IP("0.0.0.0", dest_ip);
 	}
 		
-	printf("[TCPOpen]::tcp open command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
+	printf("[TCPOpenCMD]::Received command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
 	
 	TCPOpen(source_ip, source_port, dest_ip, dest_port);
+}
+
+void tcpcloseCmd(){
+	char *next_tok = strtok(NULL, " \n");
+	int source_port, dest_port = 0;
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf;
+	uchar source_ip[4], dest_ip[4];
+
+	if (next_tok == NULL){
+		printf("usage: tcpclose ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, source_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpclose ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		source_port = gAtoi(next_tok);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpclose ip_source source_port [ip_dest [dest_port]]\n");
+		return;
+	}
+
+	if (next_tok != NULL){
+		Dot2IP(next_tok, dest_ip);
+		next_tok = strtok(NULL, " \n");
+		if (next_tok != NULL) {
+			dest_port = gAtoi(next_tok);
+		} 
+	} else {
+		Dot2IP("0.0.0.0", dest_ip);
+	}
+		
+	printf("[TCPCloseCMD]::Received command, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
+	
+	TCPClose(source_ip, source_port, dest_ip, dest_port);
 }
 	
 
