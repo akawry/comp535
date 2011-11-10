@@ -208,13 +208,16 @@ void printTCPPacket(gpacket_t *msg)
 	int iphdrlen = 20;
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
 	printf("\nTCP: ----- TCP Header -----\n");
-	printf("TCP: Source	: %d\n", tcphdr->sport);
-	printf("TCP: Dest	: %d\n", tcphdr->dport);
-	printf("TCP: Seq	: %d\n", tcphdr->seq);
-	printf("TCP: Ack Seq	: %d\n", tcphdr->ack_seq);
-	printf("TCP: SYN	: %d\n", tcphdr->SYN);
-	printf("TCP: ACK	: %d\n", tcphdr->ACK);
-	printf("TCP: FIN	: %d\n", tcphdr->FIN);
-	printf("TCP: Checksum	: %02X\n", tcphdr->checksum);
+	printf("TCP: Source	: %u\n", ntohs(tcphdr->sport));
+	printf("TCP: Dest	: %u\n", ntohs(tcphdr->dport));
+	printf("TCP: Seq	: %u\n", ntohl(tcphdr->seq));
+	printf("TCP: Ack Seq	: %u\n", ntohl(tcphdr->ack_seq));
+	printf("TCP: FIN	: %u\n", tcphdr->FIN);
+	printf("TCP: SYN	: %u\n", tcphdr->SYN);
+	printf("TCP: RST	: %u\n", tcphdr->RST);
+	printf("TCP: PSH	: %u\n", tcphdr->PSH);
+	printf("TCP: ACK	: %u\n", tcphdr->ACK);
+	printf("TCP: URG	: %u\n", tcphdr->URG);
+	printf("TCP: Checksum	: %02X\n", ntohs(tcphdr->checksum));
 	printf("\n");
 }

@@ -20,23 +20,28 @@ typedef struct _tcphdr_t
 	uint32_t seq;
 	uint32_t ack_seq;
 
-	#if BYTE_ORDER == LITTLE_ENDIAN
-	uint8_t	res:6;
-	uint8_t off:4;
-	#endif
+	#  if __BYTE_ORDER == __LITTLE_ENDIAN
+        uint8_t res1:4;
+        uint8_t doff:4;
+        uint8_t FIN:1;
+        uint8_t SYN:1;
+        uint8_t RST:1;
+        uint8_t PSH:1;
+        uint8_t ACK:1;
+        uint8_t URG:1;
+        uint8_t	res2:2;
 
-	#if BYTE_ORDER == BIG_ENDIAN
-	uint8_t	off:4;
-	uint8_t res:6;
-	#endif
-	
-	/* Flags */
-	uint8_t URG:1;
-	uint8_t ACK:1;
-	uint8_t PSH:1;
-	uint8_t RST:1;
-	uint8_t SYN:1;
-	uint8_t FIN:1;
+        #  elif __BYTE_ORDER == __BIG_ENDIAN
+        uint8_t doff:4;
+        uint8_t res1:4;
+        uint8_t res2:2;
+        uint8_t URG:1;
+        uint8_t ACK:1;
+        uint8_t PSH:1;
+        uint8_t RST:1;
+        uint8_t SYN:1;
+        uint8_t FIN:1;
+        #  endif
 
 	uint16_t win_size;
 	uint16_t checksum;
