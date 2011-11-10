@@ -59,12 +59,18 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	
 	//extract the ip packet header and header length
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
-	int iphdrlen = 20;
+	ip_pkt->ip_hdr_len = 5;
 	
 	//create the tcp header 
-	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len*4);
 	tcphdr->dport = htons((con->tcp_dest)->tcp_port);
 	tcphdr->sport = htons((con->tcp_source)->tcp_port);
+	tcphdr->doff = 5;
+	tcphdr->ACK = 0;
+	tcphdr->SYN = 0;
+	tcphdr->FIN = 0;
+	tcphdr->RST = 0;
+	tcphdr->win_size = htons(TCP_DEFAULT_WIN_SIZE);
 
 	// Put IP to the gpacket (for tcp checksumming)
 	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, (con->tcp_dest)->tcp_ip));
@@ -86,7 +92,7 @@ int TCPRequestClose(tcptcb_t *con){
 	ip_pkt->ip_pkt_len = htons(iphdrlen + TCP_HEADER_LENGTH);
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
-	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPRequestClose]:: Sent out the following request: \n");
 		printTCPPacket(out_pkt);
@@ -167,10 +173,10 @@ int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 	tcphdr_out->ack_seq = tcphdr_in->seq + 1;
 	tcphdr_out->ACK = (uint8_t)1;
 
-	ip_pkt_out->ip_pkt_len = htons(iphdrlen + TCP_HEADER_LENGTH);
+	tcphdr_out->checksum = 0;
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 	
-	int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPAcknowledgeCloseRequest]:: Updated state: %d. Sent out the following request: \n", next_state);
 		printTCPPacket(out_pkt);
@@ -188,21 +194,20 @@ int TCPRequestConnection(tcptcb_t *con){
 
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
-	int iphdrlen = 20;
-	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
 
 	// set a random ISN 
-	unsigned int iseed = (unsigned int)time(NULL);
-  	srand (iseed);
 	con->tcp_ISS = rand();
 	
 	tcphdr->seq = htonl(con->tcp_ISS);
 	tcphdr->SYN = (uint8_t)1;
-	ip_pkt->ip_pkt_len = htons(iphdrlen + TCP_HEADER_LENGTH);
+	
+	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
 	// send the pakcet to the ip module for further processing 	
-	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPRequestConnection]:: Sent out following request:\n");
 		printTCPPacket(out_pkt);
@@ -215,11 +220,11 @@ int TCPRequestConnection(tcptcb_t *con){
 }
 
 int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
-	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request.\n");
+	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request. Connection state is %u\n", con->tcp_state);
 
 	int iphdrlen = 20;
 	char tmpbuf[MAX_TMPBUF_LEN];
-	int next_state;	
+	int next_state = con->tcp_state;	
 
 	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
 	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
@@ -234,27 +239,31 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
+	uint32_t seq = ntohl(tcphdr_in->seq) + 1;
+	tcphdr_out->ack_seq = htonl(seq);
 
 	// set a random ISN for my sequence number
 	if (con->tcp_state == TCP_LISTEN){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
-		con->tcp_ISS = htonl(rand());
+		con->tcp_ISS = rand();
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
-		tcphdr_out->ack_seq = htonl(tcphdr_in->seq+1);
 		tcphdr_out->SYN = (uint8_t)1;
 
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_SENT){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		next_state = TCP_ESTABLISHED;
-		tcphdr_out->seq = htonl(con->tcp_ISS + 1);
-		tcphdr_out->ack_seq = htonl(tcphdr_in->seq + 1);
+		tcphdr_out->seq = htonl(con->tcp_ISS) + 1;
+	// must be an error 
+	} else {
+		// TODO: figure out proper handling
+		return EXIT_FAILURE;
 	}
+
 	tcphdr_out->ACK = (uint8_t)1;
 	con->tcp_IRS = ntohl(tcphdr_in->seq);
-	ip_pkt_out->ip_pkt_len = htons(iphdrlen + TCP_HEADER_LENGTH);
-
+	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
@@ -448,7 +457,7 @@ int TCPProcess(gpacket_t *in_pkt){
 	//tcphdr->checksum = 0;
 	int checksum = TCPChecksum(in_pkt);
 	if (checksum){
-		printf("[TCPProcess]:: Checksum error! Dropping packet ...%02X\n", checksum);
+		printf("[TCPProcess]:: Checksum error! Dropping packet ...%02X\n", ntohs(checksum));
 		return EXIT_FAILURE;
 	}
 

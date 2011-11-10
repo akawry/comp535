@@ -12,6 +12,7 @@
 #define TCP_MSL 10
 #define TCP_HEADER_LENGTH 20
 #define TCP_MAX_WIN_SIZE 100
+#define TCP_DEFAULT_WIN_SIZE 64
 
 typedef struct _tcphdr_t 
 {

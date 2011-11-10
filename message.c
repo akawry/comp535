@@ -218,6 +218,8 @@ void printTCPPacket(gpacket_t *msg)
 	printf("TCP: PSH	: %u\n", tcphdr->PSH);
 	printf("TCP: ACK	: %u\n", tcphdr->ACK);
 	printf("TCP: URG	: %u\n", tcphdr->URG);
+	printf("TCP: offset	: %u\n", tcphdr->doff);
+	printf("TCP: win size	: %u\n", ntohs(tcphdr->win_size));
 	printf("TCP: Checksum	: %02X\n", ntohs(tcphdr->checksum));
 	printf("\n");
 }
