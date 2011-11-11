@@ -20,13 +20,16 @@ tcphdr_t *receive_buffer[TCP_MAX_WIN_SIZE];
 int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
 	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
 	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + ip_pkt_in->ip_hdr_len*4);
+	int iphdrlen = ip_pkt_in->ip_hdr_len * 4;
 
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + ip_pkt_in->ip_hdr_len*4);
+	uint16_t seg_len = ntohs(ip_pkt_in->ip_pkt_len) - (iphdrlen + tcphdr_in->doff*4);
 
-	tcphdr_out->seq = con->tcp_SND_NXT;
-	tcphdr_out->ack_seq = tcphdr_in->seq;
+	//tcphdr_out->seq = con->tcp_SND_NXT;
+	tcphdr_out->seq = tcphdr_in->ack_seq;
+	tcphdr_out->ack_seq = htonl(ntohl(tcphdr_in->seq) + seg_len);
 	tcphdr_out->ACK = (uint8_t)1;
 
 	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
@@ -512,15 +515,55 @@ void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	}
 }
 
-// TODO: This will enqueue the packet in the receiver's queue
+// This will enqueue the packet in the receiver's queue
 // if the data lies in the receiver window 
 void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
+	tcpresend_t *cur = con->tcp_receieve_queue;
+	ip_packet_t *ip_pkt = (ip_packet_t *)in->data.data; 
+	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *) ip_pkt + ip_pkt->ip_hdr_len * 4);	
+	tcpresend_t *nxt;
+
+	tcpresend_t *pkt = (tcpresend_t *)malloc(sizeof(tcpresend_t));
+	pkt->len = len_tcp - tcphdr->doff *4;
+	pkt->seq = ntohl(tcphdr->seq);
+	pkt->time_enqueued = time(NULL);
+	pkt->pkt = in;
+	pkt->next = NULL;
+
+	if (cur == NULL){// the receiver queue is empty
+		cur = pkt;
+		return;
+	}else if (pkt->seq < cur->seq){// in pkt should put in front of receiver queue
+		pkt->next = cur;
+		con->tcp_receieve_queue = pkt;
+		return;
+	}
+
+	while (cur != NULL){// insert pkt
+		nxt = cur->next;
+		if (nxt==NULL){
+			cur->next = pkt;
+			return;
+		}else if ((pkt->seq > cur->seq) && (pkt->seq < nxt->seq)){
+			// in pkt is earlier than cur, insert the pkt
+			pkt->next = nxt;
+			cur->next = pkt;
+			return;
+		}else if (pkt->seq == cur->seq){
+			// received the same pak again, ignore, but resend ack
+			return;
+		}
+
+		cur = cur->next;
+	}
+	return;
 	
 }
 
 // TODO: this will shift the receiver window from RCV.NXT to 
 void TCPShiftQueue(tcptcb_t *con){
-
+	
 }
 
 void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
@@ -602,7 +645,7 @@ void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_
 
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
-	//printTCPPacket(in_pkt);
+	printTCPPacket(in_pkt);
 	uchar tmpbuff[MAX_TMPBUF_LEN];
 
 	// extract the packet 	
