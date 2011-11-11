@@ -78,6 +78,7 @@ void udpopenCmd();
 void udpclientCmd();
 void tcpopenCmd();
 void tcpcloseCmd();
-
+void tcpsendCmd();
+void tcpreceiveCmd();
 
 #endif

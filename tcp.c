@@ -80,6 +80,10 @@ void TCPPrintTCB(tcptcb_t *tcb){
 	printf("source ip: %s, source port: %d\tdest ip: %s, dest port:%d\n", 
 		IP2Dot(tmpbuf, gNtohl(tmpbuf+20, (tcb->tcp_source)->tcp_ip)), (tcb->tcp_source)->tcp_port,
 		IP2Dot(tmpbuf+60, gNtohl((tmpbuf+80), (tcb->tcp_dest)->tcp_ip)), (tcb->tcp_dest)->tcp_port);
+	printf("State is: %i\n",tcb->tcp_state);
+	printf("SND_UNA = %lu, SND_NXT = %lu, SND_WND = %u, SND_UP = %u, SND_WL1 = %lu, SND_WL2 = %lu, ISS = %lu\n",tcb->tcp_SND_UNA,tcb->tcp_SND_NXT,tcb->tcp_SND_WND,tcb->tcp_SND_UP,tcb->tcp_SND_WL1,tcb->tcp_SND_WL2,tcb->tcp_ISS);
+	printf("RCV_NXT = %lu, RCV_WND = %u, RCV_UP = %u, IRS = %lu\n",tcb->tcp_RCV_NXT,tcb->tcp_RCV_WND,tcb->tcp_RCV_UP,tcb->tcp_IRS);
+	printf("SEG_SEQ = %lu, SEG_ACK = %lu, SEG_LEN = %u, SEG_WND = %u, SEG_UP = %u\n",tcb->tcp_SEG_SEQ,tcb->tcp_SEG_ACK,tcb->tcp_SEG_LEN,tcb->tcp_SEG_WND,tcb->tcp_SEG_UP);
 }
 
 gpacket_t *TCPNewPacket(tcptcb_t* con){
@@ -162,7 +166,6 @@ void TCPSendLastAck(int sig){
 		cur = cur->next;
 	}
 }
-
 
 void TCPCloseWaiting(int sig){
 	printf("[TCPCloseWaiting]:: Closing all waiting connections ... \n");
@@ -465,7 +468,6 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 	}
 }
 
-
 void TCPResendAll(int sig){
 	tcptcb_t *cur = active_connections;
 	time_t now = time(NULL);
@@ -492,7 +494,6 @@ tcpresend_t *TCPGetByACK(uint32_t ack, tcptcb_t *con){
 	return NULL;
 }
 
-
 // example usage: TCPRemoveSent(TCPGetByAck(ack, con), con);	
 void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	if (pkt == NULL)
@@ -502,14 +503,40 @@ void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	// TODO: error checking ... 
 	if (cur == pkt){
 		con->tcp_send_queue = cur->next;
+		free(cur);
 	} else {
-		tcpresend_t *prev;
+		tcpresend_t *prev = cur;
 		while (cur->next != NULL){
 			if (cur == pkt){
 				prev->next = cur->next;
 				free(cur);
 				break;
 			}
+			prev = cur;
+			cur = cur->next;
+		}
+	}
+}
+
+// example usage: TCPRemoveReceieve(pkt, con);	
+void TCPRemoveReceieve(tcpresend_t *pkt, tcptcb_t *con){
+	if (pkt == NULL)
+		return;
+
+	tcpresend_t *cur = con->tcp_receieve_queue;
+	// TODO: error checking ... 
+	if (cur == pkt){
+		con->tcp_receieve_queue = cur->next;
+		free(cur);
+	} else {
+		tcpresend_t *prev = cur;
+		while (cur->next != NULL){
+			if (cur == pkt){
+				prev->next = cur->next;
+				free(cur);
+				break;
+			}
+			prev = cur;
 			cur = cur->next;
 		}
 	}
@@ -561,9 +588,18 @@ void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
 	
 }
 
-// TODO: this will shift the receiver window from RCV.NXT to 
+// TODO: need to test
+// this will shift the receiver window from RCV.NXT to 
 void TCPShiftQueue(tcptcb_t *con){
-	
+	TCPPrintTCB(con);
+	// Check if receiver queue start at RCV.NXT
+	tcpresend_t *cur = con->tcp_receieve_queue;
+	while (cur->seq == con->tcp_RCV_NXT){
+		// Correct next packet, push it.
+		TCPWriteToReceiveBuffer(con,cur->pkt);
+		con->tcp_RCV_NXT = cur->seq + cur->len;
+		TCPRemoveReceieve(cur->pkt, con);
+	}
 }
 
 void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
@@ -585,7 +621,69 @@ void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
 	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;	
 	memcpy(buffer + i, tcphdr + tcphdr->doff * 4, len_tcp); 
 }
+
+// TODO: need to test
+void ClearBuff(char *buff){
+	int i=strlen(buff);
+	for (;i>0;i--){
+		buff[i]='\0';
+	}
+}
+
+// TODO: need to test
+void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff){
+	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
+	
+	if (con != NULL){
+		strcpy(recv_buff, con->rcv_buff);
+		ClearBuff(con->rcv_buff);
 		
+		return EXIT_SUCCESS; 
+	} else {
+		printf("[UDPReceive]:: No one listening on port!\n");
+		return EXIT_FAILURE;
+	}
+}
+
+// TODO: need to test
+void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* buff, int len){
+    char tmpbuf[MAX_TMPBUF_LEN];    
+	
+	tcptcb_t * con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
+	gpacket_t *out_pkt = TCPNewPacket(con);
+	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
+
+    tcphdr->seq = con->tcp_SND_NXT;
+    tcphdr->ack_seq = con->tcp_SEG_ACK;
+
+    //temporarely set the urgent pointer to 0
+    tcphdr->urg_ptr =0;
+    tcphdr->ACK = (uint8_t)1;
+
+    strncpy((uchar *)tcphdr + tcphdr->doff *4 , buff , len);
+
+	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr->checksum = 0;
+	tcphdr->checksum = htons(TCPChecksum(out_pkt));
+
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS){
+		printf("[TCPSend]:: Sent out the following request: \n");
+		printTCPPacket(out_pkt);
+		
+		//after transmission, put on the unacked list
+		TCPEnqueueSend(out_pkt, con);
+
+	    //set the timer for retransmission
+		signal (SIGALRM, TCPResendAll);
+       	alarm (2);
+		
+	} else {
+		printf("[TCPSend]:: Failed to sent out the following request: \n");
+	}
+
+}
 
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 
@@ -642,7 +740,6 @@ void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_
 	}
 }
 		
-
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
 	printTCPPacket(in_pkt);
@@ -710,6 +807,7 @@ int TCPProcess(gpacket_t *in_pkt){
 					printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
 					TCPEnqueueReceived(in_pkt, conn);
 					TCPAcknowledgeReceived(in_pkt, conn);
+					TCPShiftQueue(conn);
 				} else {
 					printf("[TCPProcess]:: Packet was outside of receive window .. dropping!\n");
 				}

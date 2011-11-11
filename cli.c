@@ -84,6 +84,13 @@ int CLIInit(router_config *rarg)
 	#define USAGE_UDPRECEIVE          "display help information on given command"
 	#define LHELP_UDPRECEIVE          "display help information on given command"
 	
+	#define SHELP_TCPSEND          "display help information on given command"
+	#define USAGE_TCPSEND          "display help information on given command"
+	#define LHELP_TCPSEND          "display help information on given command"
+	#define SHELP_TCPRECEIVE          "display help information on given command"
+	#define USAGE_TCPRECEIVE          "display help information on given command"
+	#define LHELP_TCPRECEIVE          "display help information on given command"
+	
 	registerCLI("help", helpCmd, SHELP_HELP, USAGE_HELP, LHELP_HELP);  // Check
 	registerCLI("version", versionCmd, SHELP_VERSION, USAGE_VERSION, LHELP_VERSION); // Check
 	registerCLI("set", setCmd, SHELP_SET, USAGE_SET, LHELP_SET); // Check
@@ -107,6 +114,8 @@ int CLIInit(router_config *rarg)
 	registerCLI("udpclient",udpclientCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("tcpopen",tcpopenCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
 	registerCLI("tcpclose",tcpcloseCmd,SHELP_UDPRECEIVE,USAGE_UDPRECEIVE,LHELP_UDPRECEIVE);
+	registerCLI("tcpsend",tcpsendCmd,SHELP_TCPSEND,USAGE_TCPSEND,LHELP_TCPSEND);
+	registerCLI("tcpreceive",tcpreceiveCmd,SHELP_TCPRECEIVE,USAGE_TCPRECEIVE,LHELP_TCPRECEIVE);
 	
 	if (rarg->config_dir != NULL)
 		chdir(rarg->config_dir);                  // change to the configuration directory
@@ -1098,6 +1107,123 @@ void tcpcloseCmd(){
 	TCPClose(source_ip, source_port, dest_ip, dest_port);
 }
 	
+
+void tcpreceiveCmd()
+{
+	char *next_tok = strtok(NULL, " \n");
+	int src_port, dest_port;
+	uchar src_ip[4], dest_ip[4];
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf = (char *)malloc(MAX_UDP_PAYLOAD);
+	
+	if (next_tok == NULL){
+		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
+		return;
+	}
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, src_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		src_port = gAtoi(next_tok);
+	} else {
+		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
+		return;
+	}
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, dest_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		dest_port = gAtoi(next_tok);
+	} else {
+		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
+		return;
+	}
+		
+	printf("[TCPReceive]::tcp receive command called, src_ip address = %s, src_port = %d, dest_ip address = %s, dest_port = %d\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf, dest_ip), dest_port);
+	
+	TCPReceive(src_ip, src_port, dest_ip, dest_port, messagebuf);
+	printf("[TCPReceive]:: Payload: %s\n", messagebuf);
+}
+
+/*
+ * send a TCP packet...
+ */
+void tcpsendCmd()
+{
+	char *next_tok = strtok(NULL, " \n");
+	int pkt_size, ownPort=0;
+	
+	int src_port, dest_port;
+	uchar src_ip[4], dest_ip[4];
+	
+	char tmpbuf[MAX_TMPBUF_LEN];
+	char *messagebuf;
+
+	if (next_tok == NULL)
+	{
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		return;
+	}
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, src_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		src_port = gAtoi(next_tok);
+	} else {
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		return;
+	}
+	
+	if (next_tok != NULL){
+		Dot2IP(next_tok, dest_ip);
+		next_tok = strtok(NULL, " \n");
+	} else {
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		return;
+	}
+
+	if (next_tok != NULL) {
+		dest_port = gAtoi(next_tok);
+	} else {
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		return;
+	}
+	
+	while ((next_tok = strtok(NULL, " \n")) != NULL)
+	{
+		if (!strcmp(next_tok, "-message"))
+		{
+			next_tok = strtok(NULL, "\n");
+			messagebuf = next_tok;	
+		}
+	}
+	pkt_size = strlen(messagebuf) + 1;
+	messagebuf[pkt_size-1] = '\n';
+	
+	printf("[tcpsend]::tcp send command, own IP = %s, own port = %d, dest IP = %s, dest port = %d, Message = %s\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf, dest_ip), dest_port, messagebuf);
+	
+	TCPSend(src_ip, src_port, dest_ip, dest_port, messagebuf, pkt_size);
+
+}
+
 
 /*
  * send a ping packet...
