@@ -456,6 +456,8 @@ tcpresend_t *TCPGetByACK(uint32_t ack, tcptcb_t *con){
 	return NULL;
 }
 
+
+// example usage: TCPRemoveSent(TCPGetByAck(ack, con), con);	
 void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	if (pkt == NULL)
 		return;
@@ -477,8 +479,37 @@ void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	}
 }
 
+// TODO: This will enqueue the packet in the receiver's queue
+// if the data lies in the receiver window 
+void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
+	
+}
 
-// example usage: TCPRemoveSent(TCPGetByAck(ack, con), con);			
+// TODO: this will shift the receiver window from RCV.NXT to 
+void TCPShiftQueue(tcptcb_t *con){
+
+}
+
+void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
+	uchar *buffer = con->rcv_buff;
+	int i = 0; char c;
+	while (i < TCP_MAX_WIN_SIZE && (c = buffer[i]) != NULL) {
+		i++;
+	}
+
+	// receive buffer is full!
+	// TODO: handle this 
+	if (i == TCP_MAX_WIN_SIZE){
+		con->tcp_RCV_WND = 0;
+		return;
+	}
+
+	ip_packet_t *ip_pkt = (ip_packet_t *)in->data.data; 
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
+	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;	
+	memcpy(buffer + i, tcphdr + tcphdr->doff * 4, len_tcp); 
+}
+		
 
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 

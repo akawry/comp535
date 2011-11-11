@@ -137,6 +137,7 @@ typedef struct _tcptcb_t
 
 	char rcv_buff[TCP_MAX_WIN_SIZE];	//receive buffer 
 	tcpresend_t *tcp_send_queue;	//send buffer 	
+	tcpresend_t *tcp_receieve_queue; //receive queue
 
 	struct tcptcb_t *next; // linked list
 } tcptcb_t;
