@@ -14,7 +14,6 @@
 
 tcptcb_t *active_connections = NULL;
 tcphdr_t *receive_buffer[TCP_MAX_WIN_SIZE];
-int next = 0;
 
 int TCPWithinRcvWindow(gpacket_t *in_pkt, tcptcb_t *con){
 	ip_packet_t *ip_pkt = (ip_packet_t *)(in_pkt->data.data);
@@ -70,6 +69,8 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	tcphdr->SYN = 0;
 	tcphdr->FIN = 0;
 	tcphdr->RST = 0;
+	tcphdr->PSH = 0;
+	tcphdr->URG = 0;
 	tcphdr->win_size = htons(con->tcp_RCV_WND);
 
 	// Put IP to the gpacket (for tcp checksumming)
@@ -228,13 +229,18 @@ int TCPRequestConnection(tcptcb_t *con){
 void TCPProcessOptions(tcphdr_t *in, tcphdr_t *out){
 	uchar* buff = (uchar *)in + TCP_HEADER_LENGTH;
 	int i = 0;
+	uchar tmpbuff[4];
 	while (i < (in->doff - 5) * 4){
 		uint8_t kind = (uint8_t) buff[i];
 		uint8_t len = (uint8_t) buff[i+1];
 		if (kind == TCPOPT_NOP){
 				len = 1;
 		} else if (kind == TCPOPT_TIMESTAMP){
-			
+			unsigned long val = buff[i+2]<<12+buff[i+3]<<8+buff[i+4]<<4+buff[i+5];
+			printf("(%d %d %d %d) %d %d %d %d %d\n", buff[i+2], buff[i+3], buff[i+4], buff[i+5], buff[i+2]<<12, buff[i+3]<<8, buff[i+4]<<4, buff[i+5], val);
+			/*uint32_t tval = atoi(atoi(tmpbuff));
+			uint32_t techo = atoi(gNtohl(tmpbuff, buff + i + 6));
+			printf("\n%d %d\n", tval, techo);*/
 		}
 		i += len;
 	}
@@ -265,13 +271,16 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	tcphdr_out->ack_seq = htonl(seq);
 	
 	// received first syn
-	if (con->tcp_state == TCP_LISTEN){
+	if (con->tcp_state == TCP_LISTEN || con->tcp_state == TCP_SYN_RECEIVED){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
+
+		TCPProcessOptions(tcphdr_in, tcphdr_out);
+		
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_SENT){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
@@ -369,6 +378,7 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	con->tcp_dest = TCPNewSocket(dest_ip, dest_port);
 	con->tcp_RCV_WND = TCP_DEFAULT_WIN_SIZE;
 	con->next = NULL;
+	con->tcp_send_queue = NULL;
 
 	return con;
 }
@@ -395,6 +405,39 @@ tcptcb_t *TCPRemoveConnection(tcptcb_t *conn){
 	}
 	return NULL;
 }
+
+void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
+	tcpresend_t *cur = con->tcp_send_queue;
+	tcpresend_t *pkt = (tcpresend_t *)malloc(sizeof(tcpresend_t));
+	pkt->pkt = out;
+	pkt->next = NULL;
+	if (cur == NULL){
+		con->tcp_send_queue = pkt;
+	} else {
+		while (cur->next != NULL) cur = cur->next;
+		cur->next = pkt;
+	}
+}
+
+
+void TCPRemoveSent(gpacket_t *out, tcptcb_t *con){
+	tcpresend_t *cur = con->tcp_send_queue;
+	// TODO: error checking ... 
+	if (cur->pkt == out){
+		con->tcp_send_queue = cur->next;
+	} else {
+		tcpresend_t *prev;
+		while (cur->next != NULL){
+			if (cur->pkt == out){
+				prev->next = cur->next;
+				free(cur);
+				break;
+			}
+			cur = cur->next;
+		}
+	}
+}
+			
 
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 

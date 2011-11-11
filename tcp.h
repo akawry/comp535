@@ -88,6 +88,12 @@ typedef struct _tcpsocket_t
 #define TCP_LAST_ACK 9
 #define TCP_TIME_WAIT 10
 
+typedef struct _tcpresend_t
+{
+	gpacket_t *pkt;
+	struct tcpresend_t *next;
+} tcpresend_t;
+
 typedef struct _tcptcb_t
 {
 	tcpsocket_t *tcp_source;
@@ -125,7 +131,7 @@ typedef struct _tcptcb_t
       	uint16_t tcp_SEG_UP;  //  segment urgent pointer
 
 	char rcv_buff[TCP_MAX_WIN_SIZE];	//receive buffer 
-	char send_buff[TCP_MAX_WIN_SIZE];	//send buffer 	
+	tcpresend_t *tcp_send_queue;	//send buffer 	
 
 	struct tcptcb_t *next; // linked list
 } tcptcb_t;
