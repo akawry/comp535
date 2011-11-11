@@ -70,7 +70,7 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	tcphdr->SYN = 0;
 	tcphdr->FIN = 0;
 	tcphdr->RST = 0;
-	tcphdr->win_size = htons(TCP_DEFAULT_WIN_SIZE);
+	tcphdr->win_size = htons(con->tcp_RCV_WND);
 
 	// Put IP to the gpacket (for tcp checksumming)
 	COPY_IP(ip_pkt->ip_dst, gHtonl(tmpbuf, (con->tcp_dest)->tcp_ip));
@@ -168,9 +168,10 @@ int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 	gpacket_t *out_pkt = TCPNewPacket(conn);
 	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
-
+	
+	uint32_t seq = ntohl(tcphdr_in->seq) + 1;
 	tcphdr_out->seq = tcphdr_in->ack_seq;
-	tcphdr_out->ack_seq = tcphdr_in->seq + 1;
+	tcphdr_out->ack_seq = htonl(seq);
 	tcphdr_out->ACK = (uint8_t)1;
 
 	tcphdr_out->checksum = 0;
@@ -219,6 +220,22 @@ int TCPRequestConnection(tcptcb_t *con){
 	return success;
 }
 
+void TCPProcessOptions(tcphdr_t *in, tcphdr_t *out){
+	uchar* buff = (uchar *)in + TCP_HEADER_LENGTH;
+	int i = 0;
+	while (i < (in->doff - 5) * 4){
+		uint8_t kind = (uint8_t) buff[i];
+		uint8_t len = (uint8_t) buff[i+1];
+		if (kind == TCPOPT_NOP){
+				len = 1;
+		} else if (kind == TCPOPT_TIMESTAMP){
+			
+		}
+		i += len;
+	}
+	printf("\n");
+}
+
 int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request. Connection state is %u\n", con->tcp_state);
 
@@ -241,20 +258,20 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 	uint32_t seq = ntohl(tcphdr_in->seq) + 1;
 	tcphdr_out->ack_seq = htonl(seq);
-
-	// set a random ISN for my sequence number
+	
+	// received first syn
 	if (con->tcp_state == TCP_LISTEN){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
+		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
-
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_SENT){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		next_state = TCP_ESTABLISHED;
-		tcphdr_out->seq = htonl(con->tcp_ISS) + 1;
+		tcphdr_out->seq = tcphdr_in->ack_seq;
 	// must be an error 
 	} else {
 		// TODO: figure out proper handling
@@ -344,8 +361,9 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	}
 	con->tcp_source = TCPNewSocket(src_ip, src_port);
 	con->tcp_dest = TCPNewSocket(dest_ip, dest_port);
+	con->tcp_RCV_WND = TCP_DEFAULT_WIN_SIZE;
 	con->next = NULL;
-	
+
 	return con;
 }
 
@@ -444,7 +462,9 @@ int TCPProcess(gpacket_t *in_pkt){
 	 * BEGIN STATE MACHINE HERE
 	 */
 	tcptcb_t* conn = TCPGetConnection(gNtohl(tmpbuff, ip_pkt->ip_dst), ntohs(tcphdr->dport), gNtohl(tmpbuff+20, ip_pkt->ip_src), ntohs(tcphdr->sport));
-		
+	
+	TCPProcessOptions(tcphdr, NULL);
+	
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
 		printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
@@ -460,6 +480,9 @@ int TCPProcess(gpacket_t *in_pkt){
 		printf("[TCPProcess]:: Checksum error! Dropping packet ...%02X\n", ntohs(checksum));
 		return EXIT_FAILURE;
 	}
+
+
+	conn->tcp_SND_WND = ntohs(tcphdr->win_size);
 
 	// request for open 
 	if (tcphdr->SYN == 1){

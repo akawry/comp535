@@ -221,5 +221,11 @@ void printTCPPacket(gpacket_t *msg)
 	printf("TCP: offset	: %u\n", tcphdr->doff);
 	printf("TCP: win size	: %u\n", ntohs(tcphdr->win_size));
 	printf("TCP: Checksum	: %02X\n", ntohs(tcphdr->checksum));
-	printf("\n");
+	if (tcphdr->doff > 5){
+		printf("TCP: Options	: ");	
+		int i;
+		uchar *buff = (uchar *)tcphdr + 20;
+		for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%02X ", buff[i]);
+		printf("\n\n");
+	}
 }

@@ -14,6 +14,27 @@
 #define TCP_MAX_WIN_SIZE 100
 #define TCP_DEFAULT_WIN_SIZE 64
 
+
+/**
+ * taken from src/sys/netinet/tcp.h
+ */
+#define TCPOPT_TIMESTAMP 8
+#define TCPOLEN_TIMESTAMP 10
+#define	TCPOPT_EOL 0
+#define	TCPOPT_NOP 1
+#define	TCPOPT_MAXSEG		2
+#define    TCPOLEN_MAXSEG		4
+#define TCPOPT_WINDOW		3
+#define    TCPOLEN_WINDOW		3
+#define TCPOPT_SACK_PERMITTED	4		/* Experimental */
+#define    TCPOLEN_SACK_PERMITTED	2
+#define TCPOPT_SACK		5		/* Experimental */
+#define TCPOPT_TIMESTAMP 8
+#define    TCPOLEN_TIMESTAMP		10
+#define    TCPOLEN_TSTAMP_APPA		(TCPOLEN_TIMESTAMP+2) /* appendix A */
+#define    TCPOPT_TSTAMP_HDR		\
+    (TCPOPT_NOP<<24|TCPOPT_NOP<<16|TCPOPT_TIMESTAMP<<8|TCPOLEN_TIMESTAMP)
+
 typedef struct _tcphdr_t 
 {
 	uint16_t sport;
