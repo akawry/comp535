@@ -89,7 +89,8 @@ int TCPRequestClose(tcptcb_t *con){
 	
 	tcphdr->ACK = (uint8_t)1;
 	tcphdr->FIN = (uint8_t)1;
-	ip_pkt->ip_pkt_len = htons(iphdrlen + TCP_HEADER_LENGTH);
+	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
@@ -119,7 +120,10 @@ void TCPSendLastAck(int sig){
 			tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 			tcphdr_out->FIN = (uint8_t)1;
 			tcphdr_out->ACK = (uint8_t)1;
-			IPOutgoingPacket(out_pkt, (cur->tcp_dest)->tcp_ip, iphdrlen + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+			ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+			tcphdr_out->checksum = 0;
+			tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
+			IPOutgoingPacket(out_pkt, (cur->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 			
 			cur->tcp_state = TCP_LAST_ACK;
 		}
@@ -174,6 +178,7 @@ int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 	tcphdr_out->ack_seq = htonl(seq);
 	tcphdr_out->ACK = (uint8_t)1;
 
+	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
 	tcphdr_out->checksum = 0;
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 	
@@ -281,6 +286,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	tcphdr_out->ACK = (uint8_t)1;
 	con->tcp_IRS = ntohl(tcphdr_in->seq);
 	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr_out->checksum = 0;
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
@@ -462,9 +468,7 @@ int TCPProcess(gpacket_t *in_pkt){
 	 * BEGIN STATE MACHINE HERE
 	 */
 	tcptcb_t* conn = TCPGetConnection(gNtohl(tmpbuff, ip_pkt->ip_dst), ntohs(tcphdr->dport), gNtohl(tmpbuff+20, ip_pkt->ip_src), ntohs(tcphdr->sport));
-	
-	TCPProcessOptions(tcphdr, NULL);
-	
+
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
 		printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
