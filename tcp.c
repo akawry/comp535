@@ -229,6 +229,7 @@ int TCPRequestConnection(tcptcb_t *con){
 
 void TCPProcessOptions(tcphdr_t *in, tcphdr_t *out){
 	uchar* buff = (uchar *)in + TCP_HEADER_LENGTH;
+	uchar* out_buff = (uchar *)out + TCP_HEADER_LENGTH;
 	int i = 0;
 	uchar tmpbuff[4];
 	while (i < (in->doff - 5) * 4){
@@ -237,11 +238,15 @@ void TCPProcessOptions(tcphdr_t *in, tcphdr_t *out){
 		if (kind == TCPOPT_NOP){
 				len = 1;
 		} else if (kind == TCPOPT_TIMESTAMP){
-			unsigned long val = buff[i+2]<<12+buff[i+3]<<8+buff[i+4]<<4+buff[i+5];
-			printf("(%d %d %d %d) %d %d %d %d %d\n", buff[i+2], buff[i+3], buff[i+4], buff[i+5], buff[i+2]<<12, buff[i+3]<<8, buff[i+4]<<4, buff[i+5], val);
-			/*uint32_t tval = atoi(atoi(tmpbuff));
-			uint32_t techo = atoi(gNtohl(tmpbuff, buff + i + 6));
-			printf("\n%d %d\n", tval, techo);*/
+			uint32_t tval = htonl(buff[i+2]<<24|buff[i+3]<<16|buff[i+4]<<8|buff[i+5]);
+			uint32_t techo = buff[i+6]<<24|buff[i+7]<<16|buff[i+8]<<8|buff[i+9];
+			unsigned long hdr = htonl(TCPOPT_TSTAMP_HDR);
+			unsigned long mytime = htonl(time(NULL));
+			memcpy(out_buff, &hdr, 4);
+			memcpy(out_buff + 4, &mytime, 4);
+			memcpy(out_buff + 8, &tval, 4);
+
+			out->doff = TCP_HEADER_LENGTH/4 + 3;
 		}
 		i += len;
 	}
@@ -295,11 +300,11 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 
 	tcphdr_out->ACK = (uint8_t)1;
 	con->tcp_IRS = ntohl(tcphdr_in->seq);
-	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH + (tcphdr_out->doff*4 - TCP_HEADER_LENGTH));
 	tcphdr_out->checksum = 0;
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 
-	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH + (tcphdr_out->doff*4 - TCP_HEADER_LENGTH), 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
 		con->tcp_state = next_state;

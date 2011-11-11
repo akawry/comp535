@@ -225,7 +225,7 @@ void printTCPPacket(gpacket_t *msg)
 		printf("TCP: Options	: ");	
 		int i;
 		uchar *buff = (uchar *)tcphdr + 20;
-		for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%x ", buff[i]);
+		for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%02x ", buff[i]);
 		printf("\n\n");
 	}
 }
