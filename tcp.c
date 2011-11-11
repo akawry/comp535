@@ -16,28 +16,55 @@
 tcptcb_t *active_connections = NULL;
 tcphdr_t *receive_buffer[TCP_MAX_WIN_SIZE];
 
+
+int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
+	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
+	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + ip_pkt_in->ip_hdr_len*4);
+
+	gpacket_t *out_pkt = TCPNewPacket(con);
+	ip_packet_t *ip_pkt_out = (ip_packet_t *)(out_pkt->data.data);
+	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + ip_pkt_in->ip_hdr_len*4);
+
+	tcphdr_out->seq = con->tcp_SND_NXT;
+	tcphdr_out->ack_seq = tcphdr_in->seq;
+	tcphdr_out->ACK = (uint8_t)1;
+
+	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr_out->checksum = 0;
+	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
+	
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS){
+		printf("[TCPAcknowledgeReceived]:: Sent following ACK: \n");
+		printTCPPacket(out_pkt);
+	} else {
+		printf("[TCPAcknowledgeReceived]:: Failed to send out ACK!\n");
+	}
+	return success;
+}
+
 int TCPWithinRcvWindow(gpacket_t *in_pkt, tcptcb_t *con){
 	ip_packet_t *ip_pkt = (ip_packet_t *)(in_pkt->data.data);
 	int iphdrlen = ip_pkt->ip_hdr_len * 4;
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
-	uint16_t seg_len = ntohs(ip_pkt->ip_pkt_len) - (iphdrlen + TCP_HEADER_LENGTH);
-
+	uint16_t seg_len = ntohs(ip_pkt->ip_pkt_len) - (iphdrlen + tcphdr->doff*4);
+	uint32_t seq = ntohl(tcphdr->seq);
 	printf("[TCPWithinRcvWindow]:: Segment length was %d\n", seg_len);
 
 	// segment length of 0
 	if (seg_len == 0){
 		if (con->tcp_RCV_WND == 0){
-			return tcphdr->seq == con->tcp_RCV_NXT;
+			return seq == con->tcp_RCV_NXT;
 		} else {
-			return con->tcp_RCV_NXT <= tcphdr->seq && tcphdr->seq < con->tcp_RCV_NXT + con->tcp_RCV_WND;
+			return con->tcp_RCV_NXT <= seq && seq < con->tcp_RCV_NXT + con->tcp_RCV_WND;
 		}
 	// segment length > 0	
 	} else {
 		if (con->tcp_RCV_WND == 0){
 			return 0;
 		} else {
-			return ((con->tcp_RCV_NXT <= tcphdr->seq) && (tcphdr->seq < con->tcp_RCV_NXT + con->tcp_RCV_WND)) ||
-				((con->tcp_RCV_NXT <= tcphdr->seq + seg_len - 1) && (tcphdr->seq + seg_len - 1 < con->tcp_RCV_NXT + con->tcp_RCV_WND));
+			return ((con->tcp_RCV_NXT <= seq) && (seq < con->tcp_RCV_NXT + con->tcp_RCV_WND)) ||
+				((con->tcp_RCV_NXT <= seq + seg_len - 1) && (seq + seg_len - 1 < con->tcp_RCV_NXT + con->tcp_RCV_WND));
 		}
 	}
 
@@ -153,7 +180,7 @@ int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
 
 	int iphdrlen = 20;
-	int next_state;	
+	int next_state = conn->tcp_state;	
 
 	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
 	tcphdr_t *tcphdr_in = (tcphdr_t *)((uchar *)ip_pkt_in + iphdrlen);
@@ -281,6 +308,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
+		con->tcp_RCV_NXT = seq;
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
@@ -574,7 +602,7 @@ void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_
 
 int TCPProcess(gpacket_t *in_pkt){
 	printf("%s", "[TCPProcess]:: packet received for processing\n");
-	printTCPPacket(in_pkt);
+	//printTCPPacket(in_pkt);
 	uchar tmpbuff[MAX_TMPBUF_LEN];
 
 	// extract the packet 	
@@ -583,7 +611,8 @@ int TCPProcess(gpacket_t *in_pkt){
 
 	// create the tcp header 	
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
-	
+	uint16_t tcp_len = ntohs(ip_pkt->ip_pkt_len) - iphdrlen;
+
 	/* 
 	 * BEGIN STATE MACHINE HERE
 	 */
@@ -592,9 +621,6 @@ int TCPProcess(gpacket_t *in_pkt){
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
 		printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
-
-		//TODO: Send an ICMP packet to impress mahes :)
-
 		return EXIT_FAILURE;
 	}
 
@@ -614,7 +640,7 @@ int TCPProcess(gpacket_t *in_pkt){
 	
 	// request for close
 	} else if (tcphdr->FIN == 1){
-		TCPAcknowledgeCloseRequest(in_pkt, conn);
+		//TCPAcknowledgeCloseRequest(in_pkt, conn);
 
 	// regular data segment or ack
 	} else if (tcphdr->ACK == 1){
@@ -634,7 +660,23 @@ int TCPProcess(gpacket_t *in_pkt){
 			TCPRemoveConnection(conn);
 		// regular segment 		
 		} else if (conn->tcp_state == TCP_ESTABLISHED){
-			printf("[TCPProcess]:: Within receive window?: %d\n", TCPWithinRcvWindow(in_pkt, conn));	
+
+			// have some data 
+			if (tcp_len - tcphdr->doff * 4 > 0){
+				if (TCPWithinRcvWindow(in_pkt, conn)){
+					printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
+					TCPEnqueueReceived(in_pkt, conn);
+					TCPAcknowledgeReceived(in_pkt, conn);
+				} else {
+					printf("[TCPProcess]:: Packet was outside of receive window .. dropping!\n");
+				}
+			// probably an ACK
+			} else {
+				printf("[TCPProcess]:: Sequence number %d was ACK'd ... \n", ntohl(tcphdr->seq));
+				// remove from sender queue
+				TCPRemoveSent(TCPGetByACK(tcphdr->seq, conn), conn);
+			}
+				
 		}
 	}		
 	
