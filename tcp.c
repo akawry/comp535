@@ -7,6 +7,7 @@
 #include "tcp.h"
 #include "ip.h"
 #include <inttypes.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <slack/err.h>
@@ -410,6 +411,7 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 	tcpresend_t *cur = con->tcp_send_queue;
 	tcpresend_t *pkt = (tcpresend_t *)malloc(sizeof(tcpresend_t));
 	pkt->pkt = out;
+	pkt->time_enqueued = time(NULL);
 	pkt->next = NULL;
 	if (cur == NULL){
 		con->tcp_send_queue = pkt;
@@ -419,6 +421,23 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 	}
 }
 
+
+void TCPResendAll(int sig){
+	tcptcb_t *cur = active_connections;
+	time_t now = time(NULL);
+	while (cur != NULL){
+		tcpresend_t *q = cur->tcp_send_queue;
+		while (q != NULL){
+			if (difftime(now, q->time_enqueued) > TCP_RTT){
+				ip_packet_t *ip_pkt = (ip_packet_t *)(q->pkt)->data.data; 
+				uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;
+				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, len_tcp + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+			}
+			q = q->next;
+		}
+		cur = cur->next;
+	}
+}
 
 void TCPRemoveSent(gpacket_t *out, tcptcb_t *con){
 	tcpresend_t *cur = con->tcp_send_queue;

@@ -5,15 +5,17 @@
 #ifndef __TCP_H_
 #define __TCP_H_
 
+#include <sys/time.h>
 #include <stdint.h>
 #include "message.h"
 #include "simplequeue.h"
+
 
 #define TCP_MSL 10
 #define TCP_HEADER_LENGTH 20
 #define TCP_MAX_WIN_SIZE 100
 #define TCP_DEFAULT_WIN_SIZE 64
-
+#define TCP_RTT 2
 
 /**
  * taken from src/sys/netinet/tcp.h
@@ -90,6 +92,7 @@ typedef struct _tcpsocket_t
 
 typedef struct _tcpresend_t
 {
+	time_t time_enqueued;
 	gpacket_t *pkt;
 	struct tcpresend_t *next;
 } tcpresend_t;
