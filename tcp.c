@@ -408,8 +408,16 @@ tcptcb_t *TCPRemoveConnection(tcptcb_t *conn){
 }
 
 void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
+
+	ip_packet_t *ip_pkt = (ip_packet_t *)out->data.data; 
+	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *) ip_pkt + ip_pkt->ip_hdr_len * 4);	
+
 	tcpresend_t *cur = con->tcp_send_queue;
 	tcpresend_t *pkt = (tcpresend_t *)malloc(sizeof(tcpresend_t));
+	
+	pkt->seq = tcphdr->seq;
+	pkt->len = len_tcp;
 	pkt->pkt = out;
 	pkt->time_enqueued = time(NULL);
 	pkt->next = NULL;
@@ -428,10 +436,8 @@ void TCPResendAll(int sig){
 	while (cur != NULL){
 		tcpresend_t *q = cur->tcp_send_queue;
 		while (q != NULL){
-			if (difftime(now, q->time_enqueued) > TCP_RTT){
-				ip_packet_t *ip_pkt = (ip_packet_t *)(q->pkt)->data.data; 
-				uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;
-				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, len_tcp + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+			if (difftime(now, q->time_enqueued) > TCP_RTT){				
+				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, q->len + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 			}
 			q = q->next;
 		}
@@ -439,15 +445,29 @@ void TCPResendAll(int sig){
 	}
 }
 
-void TCPRemoveSent(gpacket_t *out, tcptcb_t *con){
+tcpresend_t *TCPGetByACK(uint32_t ack, tcptcb_t *con){
+	tcpresend_t *cur = con->tcp_send_queue;
+	while (cur != NULL){
+		if (ntohl(cur->seq) + cur->len == ntohl(ack)){
+			return cur;
+		}
+		cur = cur->next;
+	}
+	return NULL;
+}
+
+void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
+	if (pkt == NULL)
+		return;
+
 	tcpresend_t *cur = con->tcp_send_queue;
 	// TODO: error checking ... 
-	if (cur->pkt == out){
+	if (cur == pkt){
 		con->tcp_send_queue = cur->next;
 	} else {
 		tcpresend_t *prev;
 		while (cur->next != NULL){
-			if (cur->pkt == out){
+			if (cur == pkt){
 				prev->next = cur->next;
 				free(cur);
 				break;
@@ -456,7 +476,9 @@ void TCPRemoveSent(gpacket_t *out, tcptcb_t *con){
 		}
 	}
 }
-			
+
+
+// example usage: TCPRemoveSent(TCPGetByAck(ack, con), con);			
 
 void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 

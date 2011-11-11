@@ -92,6 +92,8 @@ typedef struct _tcpsocket_t
 
 typedef struct _tcpresend_t
 {
+	int len;
+	uint32_t seq;
 	time_t time_enqueued;
 	gpacket_t *pkt;
 	struct tcpresend_t *next;
