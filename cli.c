@@ -1114,7 +1114,7 @@ void tcpreceiveCmd()
 	int src_port, dest_port;
 	uchar src_ip[4], dest_ip[4];
 	char tmpbuf[MAX_TMPBUF_LEN];
-	char *messagebuf = (char *)malloc(MAX_UDP_PAYLOAD);
+	char messagebuf[MAX_UDP_PAYLOAD];
 	
 	if (next_tok == NULL){
 		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
@@ -1131,6 +1131,7 @@ void tcpreceiveCmd()
 
 	if (next_tok != NULL) {
 		src_port = gAtoi(next_tok);
+		next_tok = strtok(NULL, " \n");
 	} else {
 		printf("usage: tcpreceive src_ip src_port dest_ip dest_port\n");
 		return;
@@ -1151,7 +1152,7 @@ void tcpreceiveCmd()
 		return;
 	}
 		
-	printf("[TCPReceive]::tcp receive command called, src_ip address = %s, src_port = %d, dest_ip address = %s, dest_port = %d\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf, dest_ip), dest_port);
+	printf("[TCPReceive]::tcp receive command called, src_ip address = %s, src_port = %d, dest_ip address = %s, dest_port = %d\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
 	
 	TCPReceive(src_ip, src_port, dest_ip, dest_port, messagebuf);
 	printf("[TCPReceive]:: Payload: %s\n", messagebuf);

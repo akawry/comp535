@@ -315,6 +315,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
 		con->tcp_RCV_NXT = seq;
+		
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
@@ -419,6 +420,8 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	con->tcp_RCV_WND = TCP_DEFAULT_WIN_SIZE;
 	con->next = NULL;
 	con->tcp_send_queue = NULL;
+	con->tcp_receieve_queue = NULL;
+	ClearBuffer(con->rcv_buff);
 
 	return con;
 }
@@ -559,9 +562,12 @@ void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
 	pkt->next = NULL;
 
 	if (cur == NULL){// the receiver queue is empty
-		cur = pkt;
+		con->tcp_receieve_queue = pkt;
+		printf("[TCPEnqueueReceived]:: receiver queue is empty, inserting seq: %lu\n",pkt->seq);
 		return;
 	}else if (pkt->seq < cur->seq){// in pkt should put in front of receiver queue
+		//printf("[TCPEnqueueReceived]:: pkt seq %lu < cur seq %lu\n",pkt->seq, cur->seq);
+		printf("[TCPEnqueueReceived]:: pkt in front of queue\n");
 		pkt->next = cur;
 		con->tcp_receieve_queue = pkt;
 		return;
@@ -570,10 +576,14 @@ void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
 	while (cur != NULL){// insert pkt
 		nxt = cur->next;
 		if (nxt==NULL){
+			//printf("[TCPEnqueueReceived]:: next is null, insert cur %lu\n", cur->seq);
+			printf("[TCPEnqueueReceived]:: next is null, insert pkt\n");
 			cur->next = pkt;
 			return;
 		}else if ((pkt->seq > cur->seq) && (pkt->seq < nxt->seq)){
 			// in pkt is earlier than cur, insert the pkt
+			//printf("[TCPEnqueueReceived]:: pkt seq %lu > cur seq %lu\n",pkt->seq, cur->seq);
+			printf("[TCPEnqueueReceived]:: inserting pkt\n");
 			pkt->next = nxt;
 			cur->next = pkt;
 			return;
@@ -594,11 +604,14 @@ void TCPShiftQueue(tcptcb_t *con){
 	TCPPrintTCB(con);
 	// Check if receiver queue start at RCV.NXT
 	tcpresend_t *cur = con->tcp_receieve_queue;
+	printf("[TCPShiftQueue]:: cur seq is %lu\n",cur->seq);
+		
 	while (cur->seq == con->tcp_RCV_NXT){
 		// Correct next packet, push it.
 		TCPWriteToReceiveBuffer(con,cur->pkt);
 		con->tcp_RCV_NXT = cur->seq + cur->len;
 		TCPRemoveReceieve(cur->pkt, con);
+		printf("[TCPShiftQueue]:: cur seq and rcv.nxt are %u %u\n",cur->seq,con->tcp_RCV_NXT);
 	}
 }
 
@@ -618,16 +631,16 @@ void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
 
 	ip_packet_t *ip_pkt = (ip_packet_t *)in->data.data; 
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
-	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - ip_pkt->ip_hdr_len * 4;	
-	memcpy(buffer + i, tcphdr + tcphdr->doff * 4, len_tcp); 
+	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - (ip_pkt->ip_hdr_len * 4 + tcphdr->doff * 4);
+	printf("[TCPWriteToReceiveBuffer]:: About to write %d bytes to buffer ... \n", len_tcp);
+	printf("%s\n", (uchar *)tcphdr + tcphdr->doff * 4);	
+	memcpy(buffer + i, (uchar *)tcphdr + tcphdr->doff * 4, len_tcp); 
 }
 
 // TODO: need to test
-void ClearBuff(char *buff){
-	int i=strlen(buff);
-	for (;i>0;i--){
-		buff[i]='\0';
-	}
+void ClearBuffer(uchar *buff){
+	int i = 0; 
+	for (i = 0; i < TCP_MAX_WIN_SIZE; i++) buff[i] = NULL;
 }
 
 // TODO: need to test
@@ -635,12 +648,14 @@ void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t des
 	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	
 	if (con != NULL){
+		printf("[TCPReceive]:: Copying into buffer ... \n");
 		strcpy(recv_buff, con->rcv_buff);
-		ClearBuff(con->rcv_buff);
+		printf("Receive buffer was: %s\n", con->rcv_buff);
+		ClearBuffer(con->rcv_buff);
 		
 		return EXIT_SUCCESS; 
 	} else {
-		printf("[UDPReceive]:: No one listening on port!\n");
+		printf("[TCPReceive]:: No one listening on port!\n");
 		return EXIT_FAILURE;
 	}
 }
@@ -806,6 +821,7 @@ int TCPProcess(gpacket_t *in_pkt){
 				if (TCPWithinRcvWindow(in_pkt, conn)){
 					printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
 					TCPEnqueueReceived(in_pkt, conn);
+					//printf("[TCPProcess]:: Inserted seq: %lu\n",(conn->tcp_receieve_queue)->seq);
 					TCPAcknowledgeReceived(in_pkt, conn);
 					TCPShiftQueue(conn);
 				} else {

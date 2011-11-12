@@ -144,6 +144,7 @@ typedef struct _tcptcb_t
 
 
 // function prototypes
+void ClearBuffer(uchar* buff);
 gpacket_t *TCPNewPacket(tcptcb_t* con);
 void TCPSendLastAck(int sig);
 void TCPCloseWaiting(int sig);
