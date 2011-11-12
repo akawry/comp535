@@ -27,6 +27,8 @@ int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + ip_pkt_in->ip_hdr_len*4);
 	uint16_t seg_len = ntohs(ip_pkt_in->ip_pkt_len) - (iphdrlen + tcphdr_in->doff*4);
 
+	con->tcp_SND_UNA = tcphdr_in->ack_seq;
+
 	//tcphdr_out->seq = con->tcp_SND_NXT;
 	tcphdr_out->seq = tcphdr_in->ack_seq;
 	tcphdr_out->ack_seq = htonl(ntohl(tcphdr_in->seq) + seg_len);
@@ -239,7 +241,7 @@ int TCPRequestConnection(tcptcb_t *con){
 
 	// set a random ISN 
 	con->tcp_ISS = rand();
-	
+	con->tcp_SND_UNA = con->tcp_ISS;
 	tcphdr->seq = htonl(con->tcp_ISS);
 	tcphdr->SYN = (uint8_t)1;
 	
@@ -314,7 +316,9 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
-		con->tcp_RCV_NXT = seq;
+		con->tcp_RCV_NXT = seq +1;
+		con->tcp_SND_NXT = con->tcp_ISS +1;
+		con->tcp_SND_UNA = con->tcp_ISS;
 		
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
@@ -327,6 +331,11 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		next_state = TCP_ESTABLISHED;
 		tcphdr_out->seq = tcphdr_in->ack_seq;
+		con->tcp_SND_UNA = tcphdr_in->ack_seq;
+		con->tcp_RCV_NXT = seq;
+		con->tcp_SND_NXT = ntohl(tcphdr_out->seq) + 1;
+		//con->tcp_SND_NXT = tcphdr_in->ack_seq;
+
 	// must be an error 
 	} else {
 		// TODO: figure out proper handling
@@ -343,6 +352,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	if (success == EXIT_SUCCESS){
 		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
 		con->tcp_state = next_state;
+		TCPPrintTCB(con);
 		printTCPPacket(out_pkt);
 	} else {
 		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
@@ -598,7 +608,6 @@ void TCPEnqueueReceived(gpacket_t *in, tcptcb_t *con){
 	
 }
 
-// TODO: need to test
 // this will shift the receiver window from RCV.NXT to 
 void TCPShiftQueue(tcptcb_t *con){
 	TCPPrintTCB(con);
@@ -610,6 +619,7 @@ void TCPShiftQueue(tcptcb_t *con){
 		// Correct next packet, push it.
 		TCPWriteToReceiveBuffer(con,cur->pkt);
 		con->tcp_RCV_NXT = cur->seq + cur->len;
+
 		TCPRemoveReceieve(cur->pkt, con);
 		printf("[TCPShiftQueue]:: cur seq and rcv.nxt are %u %u\n",cur->seq,con->tcp_RCV_NXT);
 	}
@@ -637,13 +647,13 @@ void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
 	memcpy(buffer + i, (uchar *)tcphdr + tcphdr->doff * 4, len_tcp); 
 }
 
-// TODO: need to test
+
 void ClearBuffer(uchar *buff){
 	int i = 0; 
 	for (i = 0; i < TCP_MAX_WIN_SIZE; i++) buff[i] = NULL;
 }
 
-// TODO: need to test
+
 void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff){
 	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	
@@ -662,27 +672,32 @@ void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t des
 
 // TODO: need to test
 void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* buff, int len){
-    char tmpbuf[MAX_TMPBUF_LEN];    
+   	char tmpbuf[MAX_TMPBUF_LEN];    
+	printf("[TCPSend]:: Going to send out packet.\n");
 	
 	tcptcb_t * con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
+	
+	TCPPrintTCB(con);	
 
-    tcphdr->seq = con->tcp_SND_NXT;
-    tcphdr->ack_seq = con->tcp_SEG_ACK;
+	tcphdr->seq = htonl(con->tcp_SND_NXT);
+	tcphdr->ack_seq = htonl(con->tcp_RCV_NXT);
+	con->tcp_SND_NXT = con->tcp_SND_NXT + len;
 
-    //temporarely set the urgent pointer to 0
-    tcphdr->urg_ptr =0;
-    tcphdr->ACK = (uint8_t)1;
+	//temporarely set the urgent pointer to 0
+	tcphdr->urg_ptr =0;
+	tcphdr->ACK = (uint8_t)1;
+	tcphdr->PSH = (uint8_t)1;
 
-    strncpy((uchar *)tcphdr + tcphdr->doff *4 , buff , len);
+	strncpy((uchar *)tcphdr + tcphdr->doff *4 , buff , len);
 
-	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	//ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
 	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
-	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
+	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, tcphdr->doff * 4 + len, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
 		printf("[TCPSend]:: Sent out the following request: \n");
 		printTCPPacket(out_pkt);
@@ -690,9 +705,9 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 		//after transmission, put on the unacked list
 		TCPEnqueueSend(out_pkt, con);
 
-	    //set the timer for retransmission
+		//set the timer for retransmission
 		signal (SIGALRM, TCPResendAll);
-       	alarm (2);
+		alarm (2);
 		
 	} else {
 		printf("[TCPSend]:: Failed to sent out the following request: \n");

@@ -1170,11 +1170,11 @@ void tcpsendCmd()
 	uchar src_ip[4], dest_ip[4];
 	
 	char tmpbuf[MAX_TMPBUF_LEN];
-	char *messagebuf;
+	uchar *messagebuf;
 
 	if (next_tok == NULL)
 	{
-		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
 		return;
 	}
 	
@@ -1182,14 +1182,15 @@ void tcpsendCmd()
 		Dot2IP(next_tok, src_ip);
 		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
 		return;
 	}
 
 	if (next_tok != NULL) {
 		src_port = gAtoi(next_tok);
+		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
 		return;
 	}
 	
@@ -1197,14 +1198,15 @@ void tcpsendCmd()
 		Dot2IP(next_tok, dest_ip);
 		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
 		return;
 	}
 
 	if (next_tok != NULL) {
 		dest_port = gAtoi(next_tok);
+		//next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]");
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
 		return;
 	}
 	
@@ -1219,7 +1221,7 @@ void tcpsendCmd()
 	pkt_size = strlen(messagebuf) + 1;
 	messagebuf[pkt_size-1] = '\n';
 	
-	printf("[tcpsend]::tcp send command, own IP = %s, own port = %d, dest IP = %s, dest port = %d, Message = %s\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf, dest_ip), dest_port, messagebuf);
+	printf("[tcpsend]::tcp send command, own IP = %s, own port = %d, dest IP = %s, dest port = %d, Message = %s, pkt_size = %i\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf+20, dest_ip), dest_port, messagebuf, pkt_size);
 	
 	TCPSend(src_ip, src_port, dest_ip, dest_port, messagebuf, pkt_size);
 
