@@ -203,34 +203,35 @@ void printUDPPacket(gpacket_t *msg)
 
 void printTCPPacket(gpacket_t *msg)
 {
+	if (TCP_DEBUG == 1){
+		ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
+		int iphdrlen = 20;
+		tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
+		printf("\nTCP: ----- TCP Header -----\n");
+		printf("TCP: Source	: %u\n", ntohs(tcphdr->sport));
+		printf("TCP: Dest	: %u\n", ntohs(tcphdr->dport));
+		printf("TCP: Seq	: %u\n", ntohl(tcphdr->seq));
+		printf("TCP: Ack Seq	: %u\n", ntohl(tcphdr->ack_seq));
+		printf("TCP: FIN	: %u\n", tcphdr->FIN);
+		printf("TCP: SYN	: %u\n", tcphdr->SYN);
+		printf("TCP: RST	: %u\n", tcphdr->RST);
+		printf("TCP: PSH	: %u\n", tcphdr->PSH);
+		printf("TCP: ACK	: %u\n", tcphdr->ACK);
+		printf("TCP: URG	: %u\n", tcphdr->URG);
+		printf("TCP: offset	: %u\n", tcphdr->doff);
+		printf("TCP: win size	: %u\n", ntohs(tcphdr->win_size));
+		printf("TCP: Checksum	: %02X\n", ntohs(tcphdr->checksum));
+		if (tcphdr->doff > 5){
+			printf("TCP: Options	: ");	
+			int i;
+			uchar *buff = (uchar *)tcphdr + 20;
+			for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%02x ", buff[i]);
+			printf("\n\n");
+		}
 
-	ip_packet_t *ip_pkt = (ip_packet_t *)msg->data.data;
-	int iphdrlen = 20;
-	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + iphdrlen);
-	printf("\nTCP: ----- TCP Header -----\n");
-	printf("TCP: Source	: %u\n", ntohs(tcphdr->sport));
-	printf("TCP: Dest	: %u\n", ntohs(tcphdr->dport));
-	printf("TCP: Seq	: %u\n", ntohl(tcphdr->seq));
-	printf("TCP: Ack Seq	: %u\n", ntohl(tcphdr->ack_seq));
-	printf("TCP: FIN	: %u\n", tcphdr->FIN);
-	printf("TCP: SYN	: %u\n", tcphdr->SYN);
-	printf("TCP: RST	: %u\n", tcphdr->RST);
-	printf("TCP: PSH	: %u\n", tcphdr->PSH);
-	printf("TCP: ACK	: %u\n", tcphdr->ACK);
-	printf("TCP: URG	: %u\n", tcphdr->URG);
-	printf("TCP: offset	: %u\n", tcphdr->doff);
-	printf("TCP: win size	: %u\n", ntohs(tcphdr->win_size));
-	printf("TCP: Checksum	: %02X\n", ntohs(tcphdr->checksum));
-	if (tcphdr->doff > 5){
-		printf("TCP: Options	: ");	
-		int i;
-		uchar *buff = (uchar *)tcphdr + 20;
-		for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%02x ", buff[i]);
-		printf("\n\n");
-	}
-
-	uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - (iphdrlen + tcphdr->doff * 4);
-	if (len_tcp > 0){
-		printf("TCP: Payload	: %s\n", (uchar *)tcphdr + tcphdr->doff * 4);
+		uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - (iphdrlen + tcphdr->doff * 4);
+		if (len_tcp > 0){
+			printf("TCP: Payload	: %s\n", (uchar *)tcphdr + tcphdr->doff * 4);
+		}
 	}
 }

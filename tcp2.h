@@ -18,8 +18,6 @@
 #define TCP_RTT 2
 #define TCP_TIMEOUT 15
 
-#define TCP_DEBUG 1
-
 /**
  * taken from src/sys/netinet/tcp.h
  */
@@ -109,7 +107,6 @@ typedef struct _tcptcb_t
 
 	int tcp_state;  //  state of the connection (one of LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT)
 	time_t syn_sent;
-	time_t fin_sent;
 	int tcp_was_passive;
 
 	/*
@@ -131,6 +128,15 @@ typedef struct _tcptcb_t
       	uint16_t tcp_RCV_WND; //  receive window
       	uint16_t tcp_RCV_UP;  //  receive urgent pointer
       	uint32_t tcp_IRS;     //  initial receive sequence number
+
+	/*
+	 * Segment Sequence Variables
+	 */
+	uint32_t tcp_SEG_SEQ; //  segment sequence number (first sequence number of a segment)
+      	uint32_t tcp_SEG_ACK; //  segment acknowledgment number acknowledgment (next sequence number expected by the receiving TCP)
+      	uint16_t tcp_SEG_LEN; //  segment length (the number of octets occupied by the data in the segment)
+      	uint16_t tcp_SEG_WND; //  segment window
+      	uint16_t tcp_SEG_UP;  //  segment urgent pointer
 
 	char rcv_buff[TCP_MAX_WIN_SIZE];	//receive buffer 
 	tcpresend_t *tcp_send_queue;	//send buffer 	

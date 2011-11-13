@@ -88,12 +88,6 @@ void TCPResetConnection(tcptcb_t *con){
 	con->tcp_RCV_UP = 0;
 	con->tcp_IRS = 0;
 
-	con->tcp_SEG_SEQ = 0;
-	con->tcp_SEG_ACK = 0;
-	con->tcp_SEG_LEN = 0;
-	con->tcp_SEG_WND = 0;
-	con->tcp_SEG_UP = 0;
-
 	con->next = NULL;
 
 	tcpresend_t *cur = con->tcp_send_queue;
@@ -113,6 +107,7 @@ void TCPResetConnection(tcptcb_t *con){
 
 	con->tcp_send_queue = NULL;
 	con->syn_sent = NULL;
+	con->fin_sent = NULL;
 	con->tcp_was_passive = 0;
 }
 
@@ -184,7 +179,6 @@ void TCPPrintTCB(tcptcb_t *tcb){
 	printf("State is: %i\n",tcb->tcp_state);
 	printf("SND_UNA = %lu, SND_NXT = %lu, SND_WND = %u, SND_UP = %u, SND_WL1 = %lu, SND_WL2 = %lu, ISS = %lu\n",tcb->tcp_SND_UNA,tcb->tcp_SND_NXT,tcb->tcp_SND_WND,tcb->tcp_SND_UP,tcb->tcp_SND_WL1,tcb->tcp_SND_WL2,tcb->tcp_ISS);
 	printf("RCV_NXT = %lu, RCV_WND = %u, RCV_UP = %u, IRS = %lu\n",tcb->tcp_RCV_NXT,tcb->tcp_RCV_WND,tcb->tcp_RCV_UP,tcb->tcp_IRS);
-	printf("SEG_SEQ = %lu, SEG_ACK = %lu, SEG_LEN = %u, SEG_WND = %u, SEG_UP = %u\n",tcb->tcp_SEG_SEQ,tcb->tcp_SEG_ACK,tcb->tcp_SEG_LEN,tcb->tcp_SEG_WND,tcb->tcp_SEG_UP);
 }
 
 gpacket_t *TCPNewPacket(tcptcb_t* con){
@@ -216,6 +210,22 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 	return out_pkt;
 }
 
+void TCPResendAllCloseRequests(int sig){
+	printf("[TCPResendAllCloseRequests]:: Resending any unACK'd close requests...\n");
+	tcptcb_t *cur = active_connections;
+	time_t now = time(NULL);
+	while (cur != NULL){
+		if (cur->tcp_state == TCP_FIN_WAIT_1){
+			if (difftime(now, cur->fin_sent) >= TCP_RTT){
+				printf("[TCPResendAllCloseRequests]:: Resending close request for ");
+				TCPPrintTCB(cur);
+				TCPRequestClose(cur);
+			} 
+		} 
+		cur = cur->next;
+	}
+}
+
 int TCPRequestClose(tcptcb_t *con){
 	printf("[TCPRequestClose]:: Requesting a close.\n");
 
@@ -231,6 +241,11 @@ int TCPRequestClose(tcptcb_t *con){
 	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
 	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
+
+	// resend close after rtt 
+	signal (SIGALRM, TCPResendAllCloseRequests);
+	alarm (TCP_RTT);
+	con->fin_sent = time(NULL);
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
@@ -288,7 +303,7 @@ void TCPCloseWaiting(int sig){
 
 int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 
-	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
+	printf("[TCPAcknowledgeCloseRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
 
 	int iphdrlen = 20;
 	int next_state = conn->tcp_state;	
@@ -449,7 +464,6 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 
 	// must be an error 
 	} else {
-		// TODO: figure out proper handling
 		return EXIT_FAILURE;
 	}
 
@@ -595,17 +609,28 @@ void TCPResendAll(int sig){
 	printf("[TCPResendAll]:: Resending out all un ACK'd packets ...\n");////Added resend check
 	tcptcb_t *cur = active_connections;
 	time_t now = time(NULL);
+	int found = 0;	
+
+
 	while (cur != NULL){
 		tcpresend_t *q = cur->tcp_send_queue;
 		while (q != NULL){
 			if (difftime(now, q->time_enqueued) > TCP_RTT){	
 				printf("[TCPResendAll]::Resending seq number: %d\n", q->seq);////Added resend check
+				found = 1;
 				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, q->len + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 			}
 			q = q->next;
 		}
 		cur = cur->next;
 	}
+
+	if (found){
+		//set the timer for retransmission
+		signal (SIGALRM, TCPResendAll);
+		alarm (TCP_RTT);
+	}
+
 }
 
 tcpresend_t *TCPGetByACK(uint32_t ack, tcptcb_t *con){
@@ -625,7 +650,6 @@ void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 		return;
 
 	tcpresend_t *cur = con->tcp_send_queue;
-	// TODO: error checking ... 
 	if (cur == pkt){
 		con->tcp_send_queue = cur->next;
 		free(cur);
@@ -649,7 +673,6 @@ void TCPRemoveReceieve(tcpresend_t *pkt, tcptcb_t *con){
 		return;
 
 	tcpresend_t *cur = con->tcp_receieve_queue;
-	// TODO: error checking ... 
 	if (cur == pkt){
 		con->tcp_receieve_queue = cur->next;
 		free(cur);
@@ -734,7 +757,6 @@ void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
 	}
 
 	// receive buffer is full!
-	// TODO: handle this 
 	if (i == TCP_MAX_WIN_SIZE){
 		con->tcp_RCV_WND = 0;
 		return;
@@ -774,7 +796,6 @@ int TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest
 	}
 }
 
-// TODO: need to test
 int TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* buff, int len){
    	char tmpbuf[MAX_TMPBUF_LEN];    
 	tcptcb_t * con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
