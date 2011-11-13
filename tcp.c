@@ -410,6 +410,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		con->tcp_ISS = rand();
 		con->tcp_SND_NXT = con->tcp_ISS + 1;
 		con->tcp_SND_UNA = con->tcp_ISS;
+		con->tcp_RCV_NXT = seq;
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
@@ -744,13 +745,14 @@ void ClearBuffer(uchar *buff){
 }
 
 
-void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff){
+void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff, int *len){
 	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	
 	if (con != NULL){
 		printf("[TCPReceive]:: Copying into buffer ... \n");
-		strcpy(recv_buff, con->rcv_buff);
-		printf("Receive buffer was: %s\n", con->rcv_buff);
+		int i = 0; char c; while (i < TCP_MAX_WIN_SIZE && ((c = con->rcv_buff[i]) != NULL)) i++; 
+		memcpy(recv_buff, con->rcv_buff, i - 1);
+		*len = i - 1;
 		ClearBuffer(con->rcv_buff);
 		
 		return EXIT_SUCCESS; 
@@ -918,6 +920,8 @@ int TCPProcess(gpacket_t *in_pkt){
 		// first ack for initiated close 
 		} else if (conn->tcp_state == TCP_FIN_WAIT_1){
 			conn->tcp_state = TCP_FIN_WAIT_2;
+
+			//TODO: close this shit!!
 
 		// waiting for final ack to close 
 		} else if (conn->tcp_state == TCP_LAST_ACK){

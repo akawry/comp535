@@ -1154,8 +1154,17 @@ void tcpreceiveCmd()
 		
 	printf("[TCPReceive]::tcp receive command called, src_ip address = %s, src_port = %d, dest_ip address = %s, dest_port = %d\n", IP2Dot(tmpbuf, src_ip), src_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
 	
-	TCPReceive(src_ip, src_port, dest_ip, dest_port, messagebuf);
-	printf("[TCPReceive]:: Payload: %s\n", messagebuf);
+	int len;
+	TCPReceive(src_ip, src_port, dest_ip, dest_port, messagebuf, &len);
+	printf("[TCPReceive]:: Payload: \n");
+	int i; 
+	for (i = 0; i < len; i++){
+		if (messagebuf[i] == '\0')
+			printf("\n");
+		else
+			printf("%c", messagebuf[i]);
+	}
+	printf("\n");
 }
 
 /*
