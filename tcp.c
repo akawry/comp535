@@ -774,6 +774,7 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 
 	tcphdr->seq = htonl(con->tcp_SND_NXT);
 	tcphdr->ack_seq = htonl(con->tcp_RCV_NXT);
+	con->tcp_SND_NXT += len;
 
 	//temporarely set the urgent pointer to 0
 	tcphdr->urg_ptr =0;
