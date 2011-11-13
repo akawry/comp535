@@ -25,7 +25,7 @@ int TCPSendRST(gpacket_t *in_pkt){
 	tcphdr->sport = dport;
 
 	// send ack_seq
-	uint32_t seq = ntohl(tcphdr->seq) + 1;
+	uint32_t seq = tcphdr->ACK == 1 ? ntohl(tcphdr->seq) + 1 : 0;
 	tcphdr->seq = 0;
 	tcphdr->ack_seq = htonl(seq);
 
@@ -745,29 +745,41 @@ void ClearBuffer(uchar *buff){
 }
 
 
-void TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff, int *len){
+int TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* recv_buff, int *len){
 	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	
 	if (con != NULL){
 		printf("[TCPReceive]:: Copying into buffer ... \n");
-		int i = 0; char c; while (i < TCP_MAX_WIN_SIZE && ((c = con->rcv_buff[i]) != NULL)) i++; 
-		memcpy(recv_buff, con->rcv_buff, i - 1);
+		int i = 0; char c; while (i < TCP_MAX_WIN_SIZE && ((c = con->rcv_buff[i]) != NULL)) i++;
+		if (i > 0){ 
+			memcpy(recv_buff, con->rcv_buff, i - 1);
+			ClearBuffer(con->rcv_buff);
+		}
 		*len = i - 1;
-		ClearBuffer(con->rcv_buff);
 		
 		return EXIT_SUCCESS; 
 	} else {
-		printf("[TCPReceive]:: No one listening on port!\n");
+		printf("[TCPReceive]:: Error: connection does not exist\n");
 		return EXIT_FAILURE;
 	}
 }
 
 // TODO: need to test
-void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* buff, int len){
+int TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_port, uchar* buff, int len){
    	char tmpbuf[MAX_TMPBUF_LEN];    
-	printf("[TCPSend]:: Going to send out packet.\n");
-	
 	tcptcb_t * con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
+	if (con == NULL){
+		printf("[TCPSend]:: Error:  connection does not exist\n");
+		return EXIT_FAILURE;
+	} 
+
+	if (con->tcp_state != TCP_ESTABLISHED){
+		printf("[TCPSend]:: Error: connection %s\n", 
+			(con->tcp_state == TCP_LISTEN || con->tcp_state == TCP_SYN_SENT || con->tcp_state == TCP_SYN_RECEIVED) ? "has not yet been established." :
+			"is closing");
+		return EXIT_FAILURE;
+	}
+
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
@@ -805,7 +817,7 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 
 }
 
-void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 
 	tcptcb_t *tcp_conn = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	if (tcp_conn == NULL){
@@ -828,29 +840,34 @@ void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_p
 		} else {
 			TCPRequestConnection(tcp_conn);
 		}
+
+		return EXIT_SUCCESS;
+	} else {
+		printf("[TCPOpen]:: Error: connection already exists.");
+		return EXIT_FAILURE;
 	}
 }
 
-void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 
 	tcpsocket_t* dest = TCPNewSocket(dest_ip, dest_port);
 
 	tcptcb_t* cur = active_connections;
-	if (cur == NULL){
-		printf("[TCPClose]:: Dont have any connections to close!\n");
-	}
+	int found = 0;
 	while (cur != NULL){
 
 		if (TCPCompareSocket(cur->tcp_source, src_ip, src_port)){
 
 			// have a socket passively waiting and still in the listen state 
 			if (TCPIsPassive(cur->tcp_dest)){
+				found = 1;
 				printf("[TCPClose]:: Closing connection: ");
 				TCPPrintTCB(cur);
 				cur = TCPRemoveConnection(cur);
 				
 			// have a socket waiting with exact destination socket
 			} else if (TCPIsPassive(dest) || TCPCompareSocket(cur->tcp_dest, dest_ip, dest_port)) {
+				found = 1;
 				TCPRequestClose(cur);
 				cur = cur->next;
 			} else {
@@ -858,6 +875,13 @@ void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_
 			}
 		}
 	}
+
+	if (!found){
+		printf("[TCPClose]:: Error: connection does not exist\n");
+		return EXIT_FAILURE;
+	} 
+
+	return EXIT_SUCCESS;	
 }
 		
 int TCPProcess(gpacket_t *in_pkt){
@@ -887,9 +911,11 @@ int TCPProcess(gpacket_t *in_pkt){
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
 		printf("[TCPProcess]:: No one listening on destination ip and port.... \n");
-		if (tcphdr->SYN == 1){
+		if (tcphdr->RST != 1){
 			printf("[TCPProcess]:: Sending out an RST\n");
 			TCPSendRST(in_pkt);
+		} else {
+			printf("[TCPProcess]:: Ignoring packet ... \n");
 		}
 		return EXIT_FAILURE;
 	}

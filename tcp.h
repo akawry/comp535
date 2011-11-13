@@ -151,8 +151,8 @@ gpacket_t *TCPNewPacket(tcptcb_t* con);
 void TCPSendLastAck(int sig);
 void TCPCloseWaiting(int sig);
 tcptcb_t *TCPRemoveConnection(tcptcb_t *conn);
-void TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
-void TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
+int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
+int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 int TCPProcess(gpacket_t *in_pkt);
 uint16_t TCPChecksum(gpacket_t *in_pkt);
 
