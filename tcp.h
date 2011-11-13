@@ -107,6 +107,7 @@ typedef struct _tcptcb_t
 
 	int tcp_state;  //  state of the connection (one of LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT)
 	time_t syn_sent;
+	int tcp_was_passive;
 
 	/*
 	 * Send Sequence Variables
