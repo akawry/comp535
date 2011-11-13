@@ -80,5 +80,6 @@ void tcpopenCmd();
 void tcpcloseCmd();
 void tcpsendCmd();
 void tcpreceiveCmd();
+void tcpclientCmd();
 
 #endif
