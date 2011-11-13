@@ -390,32 +390,6 @@ int TCPRequestConnection(tcptcb_t *con){
 	return success;
 }
 
-void TCPProcessOptions(tcphdr_t *in, tcphdr_t *out){
-	uchar* buff = (uchar *)in + TCP_HEADER_LENGTH;
-	uchar* out_buff = (uchar *)out + TCP_HEADER_LENGTH;
-	int i = 0;
-	uchar tmpbuff[4];
-	while (i < (in->doff - 5) * 4){
-		uint8_t kind = (uint8_t) buff[i];
-		uint8_t len = (uint8_t) buff[i+1];
-		if (kind == TCPOPT_NOP){
-				len = 1;
-		} else if (kind == TCPOPT_TIMESTAMP){
-			uint32_t tval = htonl(buff[i+2]<<24|buff[i+3]<<16|buff[i+4]<<8|buff[i+5]);
-			uint32_t techo = buff[i+6]<<24|buff[i+7]<<16|buff[i+8]<<8|buff[i+9];
-			unsigned long hdr = htonl(TCPOPT_TSTAMP_HDR);
-			unsigned long mytime = htonl(time(NULL));
-			memcpy(out_buff, &hdr, 4);
-			memcpy(out_buff + 4, &mytime, 4);
-			memcpy(out_buff + 8, &tval, 4);
-
-			out->doff = TCP_HEADER_LENGTH/4 + 3;
-		}
-		i += len;
-	}
-	printf("\n");
-}
-
 int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request. Connection state is %u\n", con->tcp_state);
 
@@ -450,8 +424,6 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
-
-		TCPProcessOptions(tcphdr_in, tcphdr_out);
 		
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_SENT){
