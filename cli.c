@@ -1170,7 +1170,7 @@ void tcpsendCmd()
 	uchar src_ip[4], dest_ip[4];
 	
 	char tmpbuf[MAX_TMPBUF_LEN];
-	uchar *messagebuf;
+	uchar *messagebuf = NULL;
 
 	if (next_tok == NULL)
 	{
@@ -1215,9 +1215,16 @@ void tcpsendCmd()
 		if (!strcmp(next_tok, "-message"))
 		{
 			next_tok = strtok(NULL, "\n");
-			messagebuf = next_tok;	
+			messagebuf = next_tok;
+			break;
 		}
 	}
+
+	if (messagebuf == NULL){
+		printf("usage: tcpsend own_IP own_PORT dst_IP Dst_PORT [-message MESSAGE]\n");
+		return;
+	}
+
 	pkt_size = strlen(messagebuf) + 1;
 	messagebuf[pkt_size-1] = '\n';
 	

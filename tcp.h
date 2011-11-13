@@ -16,6 +16,7 @@
 #define TCP_MAX_WIN_SIZE 100
 #define TCP_DEFAULT_WIN_SIZE 64
 #define TCP_RTT 2
+#define TCP_TIMEOUT 15
 
 /**
  * taken from src/sys/netinet/tcp.h
@@ -105,6 +106,7 @@ typedef struct _tcptcb_t
 	tcpsocket_t *tcp_dest;
 
 	int tcp_state;  //  state of the connection (one of LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT)
+	time_t syn_sent;
 
 	/*
 	 * Send Sequence Variables

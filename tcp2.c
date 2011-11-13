@@ -758,6 +758,7 @@ int TCPProcess(gpacket_t *in_pkt){
 					printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
 					TCPEnqueueReceived(in_pkt, conn);
 					TCPAcknowledgeReceived(in_pkt, conn);
+					TCPShiftQueue(conn);
 				} else {
 					printf("[TCPProcess]:: Packet was outside of receive window .. dropping!\n");
 				}

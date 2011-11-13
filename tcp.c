@@ -14,7 +14,90 @@
 #include <string.h>
 
 tcptcb_t *active_connections = NULL;
-tcphdr_t *receive_buffer[TCP_MAX_WIN_SIZE];
+
+int TCPSendRST(gpacket_t *in_pkt){
+	ip_packet_t *ip_pkt_in = (ip_packet_t *)(in_pkt->data.data);
+	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt_in + ip_pkt_in->ip_hdr_len*4);
+	
+	// switch source and destination
+	uint16_t dport = tcphdr->dport;
+	tcphdr->dport = tcphdr->sport;
+	tcphdr->sport = dport;
+
+	// send ack_seq
+	uint32_t seq = ntohl(tcphdr->seq) + 1;
+	tcphdr->seq = 0;
+	tcphdr->ack_seq = htonl(seq);
+
+	// reset flags 
+	tcphdr->ACK = 1;
+	tcphdr->SYN = 0;
+	tcphdr->FIN = 0;
+	tcphdr->RST = 1;
+	tcphdr->PSH = 0;
+	tcphdr->URG = 0;
+
+	// remove options, set win size to 0 
+	ip_pkt_in->ip_pkt_len = htons(ip_pkt_in->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	tcphdr->doff = 5;
+	tcphdr->win_size = 0;
+
+	tcphdr->checksum = 0;
+	tcphdr->checksum = TCPChecksum(in_pkt);
+
+	int success = IPOutgoingPacket(in_pkt, NULL, NULL, 0, TCP_PROTOCOL);
+	if (success == EXIT_SUCCESS){
+		printf("[TCPSendRST]:: Sent out following RST:\n");
+		printTCPPacket(in_pkt);
+	} else {
+		printf("[TCPSendRST]:: Failed to send out RST!!\n");
+	}
+	return success;
+}
+
+void TCPResendConnectionRequest(int sig){
+	tcptcb_t *cur = active_connections;
+	time_t now = time(NULL);
+	while (cur != NULL){
+		if (cur->tcp_state == TCP_SYN_SENT){
+			if (difftime(now, cur->syn_sent) < TCP_TIMEOUT){
+				printf("[TCPResendConnectionRequest]:: Resending connection request for ");
+				TCPPrintTCB(cur);
+				TCPRequestConnection(cur);
+			} else {
+				printf("[TCPResendConnectionRequest]:: Connection attempt timed out!\n");
+				cur->tcp_state = TCP_LISTEN;
+				cur->syn_sent = NULL;
+			}
+		} 
+		cur = cur->next;
+	}
+}
+
+void TCPResetConnection(tcptcb_t *con){
+	con->tcp_SND_UNA = 0;
+	con->tcp_SND_NXT = 0;
+	con->tcp_SND_WND = 0;
+	con->tcp_SND_UP = 0;
+	con->tcp_SND_WL1 = 0;
+	con->tcp_SND_WL2 = 0;
+	con->tcp_ISS = 0;
+
+	con->tcp_RCV_WND = TCP_DEFAULT_WIN_SIZE;
+	con->tcp_RCV_NXT = 0;
+	con->tcp_RCV_UP = 0;
+	con->tcp_IRS = 0;
+
+	con->tcp_SEG_SEQ = 0;
+	con->tcp_SEG_ACK = 0;
+	con->tcp_SEG_LEN = 0;
+	con->tcp_SEG_WND = 0;
+	con->tcp_SEG_UP = 0;
+
+	con->next = NULL;
+	con->tcp_send_queue = NULL;
+	con->syn_sent = NULL;
+}
 
 
 int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
@@ -249,6 +332,15 @@ int TCPRequestConnection(tcptcb_t *con){
 	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
+	// set a retransmit timer for the request
+	signal (SIGALRM, TCPResendConnectionRequest);
+       	alarm (TCP_RTT);
+
+	// set a timeout for the request
+	if (con->syn_sent == NULL){
+		con->syn_sent = time(NULL);
+	}
+
 	// send the pakcet to the ip module for further processing 	
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
@@ -333,7 +425,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		tcphdr_out->seq = tcphdr_in->ack_seq;
 		con->tcp_SND_UNA = tcphdr_in->ack_seq;
 		con->tcp_RCV_NXT = seq;
-		con->tcp_SND_NXT = ntohl(tcphdr_out->seq) + 1;
+		con->tcp_SND_NXT = ntohl(tcphdr_out->seq);
 		//con->tcp_SND_NXT = tcphdr_in->ack_seq;
 
 	// must be an error 
@@ -354,6 +446,9 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		con->tcp_state = next_state;
 		TCPPrintTCB(con);
 		printTCPPacket(out_pkt);
+
+		if (con->tcp_state == TCP_ESTABLISHED)
+			printf("[TCPAcknowledgeConnectionRequest]:: Connection established ...\n");
 	} else {
 		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
 	}
@@ -427,10 +522,7 @@ tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], u
 	}
 	con->tcp_source = TCPNewSocket(src_ip, src_port);
 	con->tcp_dest = TCPNewSocket(dest_ip, dest_port);
-	con->tcp_RCV_WND = TCP_DEFAULT_WIN_SIZE;
-	con->next = NULL;
-	con->tcp_send_queue = NULL;
-	con->tcp_receieve_queue = NULL;
+	TCPResetConnection(con);
 	ClearBuffer(con->rcv_buff);
 
 	return con;
@@ -679,12 +771,9 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
-	
-	TCPPrintTCB(con);	
 
 	tcphdr->seq = htonl(con->tcp_SND_NXT);
 	tcphdr->ack_seq = htonl(con->tcp_RCV_NXT);
-	con->tcp_SND_NXT = con->tcp_SND_NXT + len;
 
 	//temporarely set the urgent pointer to 0
 	tcphdr->urg_ptr =0;
@@ -693,7 +782,7 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 
 	strncpy((uchar *)tcphdr + tcphdr->doff *4 , buff , len);
 
-	//ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH);
+	ip_pkt->ip_pkt_len = htons(ip_pkt->ip_hdr_len*4 + TCP_HEADER_LENGTH + len);
 	tcphdr->checksum = 0;
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
@@ -707,7 +796,7 @@ void TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 
 		//set the timer for retransmission
 		signal (SIGALRM, TCPResendAll);
-		alarm (2);
+		alarm (TCP_RTT);
 		
 	} else {
 		printf("[TCPSend]:: Failed to sent out the following request: \n");
@@ -787,30 +876,35 @@ int TCPProcess(gpacket_t *in_pkt){
 	 * BEGIN STATE MACHINE HERE
 	 */
 	tcptcb_t* conn = TCPGetConnection(gNtohl(tmpbuff, ip_pkt->ip_dst), ntohs(tcphdr->dport), gNtohl(tmpbuff+20, ip_pkt->ip_src), ntohs(tcphdr->sport));
-
-	// no TCB's waiting for where the packet came from 
-	if (conn == NULL){
-		printf("[TCPProcess]:: No one listening on destination ip and port.... dropping the packet\n");
-		return EXIT_FAILURE;
-	}
-
-	//tcphdr->checksum = 0;
+	
 	int checksum = TCPChecksum(in_pkt);
 	if (checksum){
 		printf("[TCPProcess]:: Checksum error! Dropping packet ...%02X\n", ntohs(checksum));
 		return EXIT_FAILURE;
 	}
 
+	// no TCB's waiting for where the packet came from 
+	if (conn == NULL){
+		printf("[TCPProcess]:: No one listening on destination ip and port.... \n");
+		if (tcphdr->SYN == 1){
+			printf("[TCPProcess]:: Sending out an RST\n");
+			TCPSendRST(in_pkt);
+		}
+		return EXIT_FAILURE;
+	}
 
 	conn->tcp_SND_WND = ntohs(tcphdr->win_size);
 
 	// request for open 
 	if (tcphdr->SYN == 1){
-		TCPAcknowledgeConnectionRequest(in_pkt, conn);
+		if (conn->tcp_state != TCP_ESTABLISHED)
+			TCPAcknowledgeConnectionRequest(in_pkt, conn);
+		else
+			printf("[TCPProcess]:: Ignoring duplicate SYN ... \n");
 	
 	// request for close
 	} else if (tcphdr->FIN == 1){
-		//TCPAcknowledgeCloseRequest(in_pkt, conn);
+		TCPAcknowledgeCloseRequest(in_pkt, conn);
 
 	// regular data segment or ack
 	} else if (tcphdr->ACK == 1){
@@ -836,7 +930,6 @@ int TCPProcess(gpacket_t *in_pkt){
 				if (TCPWithinRcvWindow(in_pkt, conn)){
 					printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
 					TCPEnqueueReceived(in_pkt, conn);
-					//printf("[TCPProcess]:: Inserted seq: %lu\n",(conn->tcp_receieve_queue)->seq);
 					TCPAcknowledgeReceived(in_pkt, conn);
 					TCPShiftQueue(conn);
 				} else {
@@ -844,16 +937,34 @@ int TCPProcess(gpacket_t *in_pkt){
 				}
 			// probably an ACK
 			} else {
-				printf("[TCPProcess]:: Sequence number %d was ACK'd ... \n", ntohl(tcphdr->seq));
+				printf("[TCPProcess]:: Sequence number %u was ACK'd ... \n", ntohl(tcphdr->seq));
+				
 				// remove from sender queue
 				TCPRemoveSent(TCPGetByACK(tcphdr->seq, conn), conn);
 			}
 				
+		} else if (tcphdr->RST == 1){
+
+			if (conn->tcp_state == TCP_SYN_SENT || conn->tcp_state == TCP_SYN_RECEIVED){
+				printf("[TCPProcess]:: Received RST\n");
+				if (TCPWithinRcvWindow(in_pkt, conn)){
+					printf("[TCPProcess]:: Valid RST, returning to LISTEN state ... \n"); 
+					conn->tcp_state = TCP_LISTEN;
+				} else {
+					printf("[TCPProcess]:: Invalid RST, ignoring ... \n");
+				}
+			} else {
+				printf("[TCPProcess]:: Received RST, aborting!! \n");
+				//TODO: figure out state to put connection into
+			}
+				
 		}
-	}		
+
+	} 		
 	
 	return EXIT_FAILURE;
 }
+
 
 uint16_t TCPChecksum(gpacket_t *in_pkt) {
 	uint16_t prot_tcp = 6;
@@ -872,6 +983,7 @@ uint16_t TCPChecksum(gpacket_t *in_pkt) {
 
 	// get the udp packet length and pad with a trailing 0 if the number of octets is odd  	
 	uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - iphdrlen;
+	printf("[TCPChecksum]:: TCP length was %d\n", len_tcp);
 	if (len_tcp % 2 != 0){
 		pad = 1;
 
