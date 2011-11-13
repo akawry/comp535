@@ -110,7 +110,7 @@ int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
 	tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + ip_pkt_in->ip_hdr_len*4);
 	uint16_t seg_len = ntohs(ip_pkt_in->ip_pkt_len) - (iphdrlen + tcphdr_in->doff*4);
 
-	con->tcp_SND_UNA = tcphdr_in->ack_seq;
+	//con->tcp_SND_UNA = tcphdr_in->ack_seq;////When sending out ack, don't change snd una
 
 	//tcphdr_out->seq = con->tcp_SND_NXT;
 	tcphdr_out->seq = tcphdr_in->ack_seq;
@@ -557,9 +557,10 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 
 	tcpresend_t *cur = con->tcp_send_queue;
 	tcpresend_t *pkt = (tcpresend_t *)malloc(sizeof(tcpresend_t));
-	
+
+	printf("[TCPEnqueueReceived]:: len_tcp is:%i, tcphdr->doff is:%i\n",len_tcp,tcphdr->doff);////for debug
 	pkt->seq = tcphdr->seq;
-	pkt->len = len_tcp;
+	pkt->len = len_tcp - tcphdr->doff *4;////pkt length should only be the payload length
 	pkt->pkt = out;
 	pkt->time_enqueued = time(NULL);
 	pkt->next = NULL;
@@ -572,12 +573,16 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 }
 
 void TCPResendAll(int sig){
+	printf("[TCPResendAll]::being called\n");////Added resend check
 	tcptcb_t *cur = active_connections;
 	time_t now = time(NULL);
 	while (cur != NULL){
+		printf("[TCPResendAll]::Found a connection\n");////Added resend check
 		tcpresend_t *q = cur->tcp_send_queue;
 		while (q != NULL){
-			if (difftime(now, q->time_enqueued) > TCP_RTT){				
+			printf("[TCPResendAll]::Found a packet\n");////Added resend check
+			if (difftime(now, q->time_enqueued) > TCP_RTT){	
+				printf("[TCPResendAll]::Sending packet in resend queue\n");////Added resend check
 				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, q->len + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 			}
 			q = q->next;
@@ -589,6 +594,7 @@ void TCPResendAll(int sig){
 tcpresend_t *TCPGetByACK(uint32_t ack, tcptcb_t *con){
 	tcpresend_t *cur = con->tcp_send_queue;
 	while (cur != NULL){
+		printf("[TCPGetByACK]::cur->seq is:%u, cur->len is %i, ack is %u\n",ntohl(cur->seq),cur->len,ntohl(ack));////for debuging
 		if (ntohl(cur->seq) + cur->len == ntohl(ack)){
 			return cur;
 		}
@@ -605,12 +611,14 @@ void TCPRemoveSent(tcpresend_t *pkt, tcptcb_t *con){
 	tcpresend_t *cur = con->tcp_send_queue;
 	// TODO: error checking ... 
 	if (cur == pkt){
+		printf("[TCPRemoveSent]::removing packet\n");////More debug info
 		con->tcp_send_queue = cur->next;
 		free(cur);
 	} else {
 		tcpresend_t *prev = cur;
 		while (cur->next != NULL){
 			if (cur == pkt){
+				printf("[TCPRemoveSent]::removing packet\n");////More debug info
 				prev->next = cur->next;
 				free(cur);
 				break;
@@ -941,6 +949,7 @@ int TCPProcess(gpacket_t *in_pkt){
 		// final ACK for handshake 
 		if (conn->tcp_state == TCP_SYN_RECEIVED){
 			conn->tcp_state = TCP_ESTABLISHED;
+			conn->tcp_RCV_NXT = ntohl(tcphdr->seq);////Add rcv_nxt after hand shake
 			printf("[TCPProcess]:: Connection fully established ... \n");
 
 		// first ack for initiated close 
@@ -968,10 +977,11 @@ int TCPProcess(gpacket_t *in_pkt){
 				}
 			// probably an ACK
 			} else {
-				printf("[TCPProcess]:: Sequence number %u was ACK'd ... \n", ntohl(tcphdr->seq));
+				conn->tcp_SND_UNA = ntohl(tcphdr->ack_seq);////change snd_una
+				printf("[TCPProcess]:: Sequence number %u was ACK'd ... \n", conn->tcp_SND_UNA);////change to ack seq from seq
 				
 				// remove from sender queue
-				TCPRemoveSent(TCPGetByACK(tcphdr->seq, conn), conn);
+				TCPRemoveSent(TCPGetByACK(tcphdr->ack_seq, conn), conn);////change to ack_seq from seq
 			}
 				
 		} else if (tcphdr->RST == 1){
