@@ -408,10 +408,8 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
-		con->tcp_RCV_NXT = seq +1;
-		con->tcp_SND_NXT = con->tcp_ISS +1;
+		con->tcp_SND_NXT = con->tcp_ISS + 1;
 		con->tcp_SND_UNA = con->tcp_ISS;
-		
 		next_state = TCP_SYN_RECEIVED;	
 		tcphdr_out->seq = htonl(con->tcp_ISS);
 		tcphdr_out->SYN = (uint8_t)1;
@@ -426,7 +424,6 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		con->tcp_SND_UNA = tcphdr_in->ack_seq;
 		con->tcp_RCV_NXT = seq;
 		con->tcp_SND_NXT = ntohl(tcphdr_out->seq);
-		//con->tcp_SND_NXT = tcphdr_in->ack_seq;
 
 	// must be an error 
 	} else {
@@ -631,6 +628,7 @@ void TCPRemoveReceieve(tcpresend_t *pkt, tcptcb_t *con){
 	tcpresend_t *cur = con->tcp_receieve_queue;
 	// TODO: error checking ... 
 	if (cur == pkt){
+		printf("[TCPRemoveReceive]:: Removing head ... \n");
 		con->tcp_receieve_queue = cur->next;
 		free(cur);
 	} else {
@@ -712,7 +710,7 @@ void TCPShiftQueue(tcptcb_t *con){
 		TCPWriteToReceiveBuffer(con,cur->pkt);
 		con->tcp_RCV_NXT = cur->seq + cur->len;
 
-		TCPRemoveReceieve(cur->pkt, con);
+		TCPRemoveReceieve(cur, con);
 		printf("[TCPShiftQueue]:: cur seq and rcv.nxt are %u %u\n",cur->seq,con->tcp_RCV_NXT);
 	}
 }
@@ -898,10 +896,12 @@ int TCPProcess(gpacket_t *in_pkt){
 
 	// request for open 
 	if (tcphdr->SYN == 1){
-		if (conn->tcp_state != TCP_ESTABLISHED)
-			TCPAcknowledgeConnectionRequest(in_pkt, conn);
-		else
-			printf("[TCPProcess]:: Ignoring duplicate SYN ... \n");
+	
+		// connection got screwed up.. start over
+		if (conn->tcp_state == TCP_ESTABLISHED)
+			conn->tcp_state == TCP_LISTEN;
+
+		TCPAcknowledgeConnectionRequest(in_pkt, conn);
 	
 	// request for close
 	} else if (tcphdr->FIN == 1){
@@ -984,7 +984,7 @@ uint16_t TCPChecksum(gpacket_t *in_pkt) {
 
 	// get the udp packet length and pad with a trailing 0 if the number of octets is odd  	
 	uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - iphdrlen;
-	printf("[TCPChecksum]:: TCP length was %d\n", len_tcp);
+
 	if (len_tcp % 2 != 0){
 		pad = 1;
 

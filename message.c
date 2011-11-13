@@ -228,4 +228,9 @@ void printTCPPacket(gpacket_t *msg)
 		for (i = 0; i < (tcphdr->doff - 5)*4; i++) printf("%02x ", buff[i]);
 		printf("\n\n");
 	}
+
+	uint16_t len_tcp = ntohs(ip_pkt->ip_pkt_len) - (iphdrlen + tcphdr->doff * 4);
+	if (len_tcp > 0){
+		printf("TCP: Payload	: %s\n", (uchar *)tcphdr + tcphdr->doff * 4);
+	}
 }
