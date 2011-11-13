@@ -885,6 +885,8 @@ int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_p
 			} else {
 				cur = cur->next;
 			}
+		} else {
+			cur = cur->next;
 		}
 	}
 
