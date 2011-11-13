@@ -259,6 +259,8 @@ void TCPSendLastAck(int sig){
 			tcphdr_t *tcphdr_out = (tcphdr_t *)((uchar *)ip_pkt_out + iphdrlen);
 			tcphdr_out->FIN = (uint8_t)1;
 			tcphdr_out->ACK = (uint8_t)1;
+			tcphdr_out->seq = ntohl(cur->tcp_SND_NXT);
+			tcphdr_out->ack_seq = ntohl(cur->tcp_RCV_NXT);
 			ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH);
 			tcphdr_out->checksum = 0;
 			tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
@@ -352,8 +354,8 @@ int TCPRequestConnection(tcptcb_t *con){
 	tcphdr->checksum = htons(TCPChecksum(out_pkt));
 
 	// set a retransmit timer for the request
-	//signal (SIGALRM, TCPResendConnectionRequest);
-       	//alarm (TCP_RTT);
+	signal (SIGALRM, TCPResendConnectionRequest);
+       	alarm (TCP_RTT);
 
 	// set a timeout for the request
 	if (con->syn_sent == NULL){
@@ -453,7 +455,7 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 
 	tcphdr_out->ACK = (uint8_t)1;
 	con->tcp_IRS = ntohl(tcphdr_in->seq);
-	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + TCP_HEADER_LENGTH + (tcphdr_out->doff*4 - TCP_HEADER_LENGTH));
+	ip_pkt_out->ip_pkt_len = htons(ip_pkt_out->ip_hdr_len*4 + tcphdr_out->doff*4);
 	tcphdr_out->checksum = 0;
 	tcphdr_out->checksum = htons(TCPChecksum(out_pkt));
 
@@ -461,7 +463,6 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	if (success == EXIT_SUCCESS){
 		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
 		con->tcp_state = next_state;
-		TCPPrintTCB(con);
 		printTCPPacket(out_pkt);
 
 		if (con->tcp_state == TCP_ESTABLISHED)
