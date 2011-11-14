@@ -18,8 +18,7 @@
 #define TCP_RTT 2
 #define TCP_TIMEOUT 15
 
-#define TCP_DEBUG 1
-
+#define TCP_DEBUG 0
 /**
  * taken from src/sys/netinet/tcp.h
  */
@@ -92,6 +91,7 @@ typedef struct _tcpsocket_t
 #define TCP_CLOSING 8
 #define TCP_LAST_ACK 9
 #define TCP_TIME_WAIT 10
+#define TCP_CLOSED 11
 
 typedef struct _tcpresend_t
 {
@@ -147,7 +147,7 @@ void TCPSendLastAck(int sig);
 void TCPCloseWaiting(int sig);
 tcptcb_t *TCPRemoveConnection(tcptcb_t *conn);
 int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
-int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
+tcptcb_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port);
 int TCPProcess(gpacket_t *in_pkt);
 uint16_t TCPChecksum(gpacket_t *in_pkt);
 

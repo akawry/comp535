@@ -1251,24 +1251,18 @@ void tcpsendCmd()
 void tcpclientCmd()
 {
 	char *next_tok = strtok(NULL, " \n");
-	int source_port, dest_port, empty_port = 0;
+	int source_port, dest_port = 0;
 	char tmpbuf[MAX_TMPBUF_LEN];
-	char *messagebuf;
-	uchar *writebuf = (uchar *)malloc(MAX_UDP_PAYLOAD), *readbuf = (uchar *)malloc(MAX_UDP_PAYLOAD);
-	uchar source_ip[4], dest_ip[4], empty_ip[4];
-	Dot2IP("0.0.0.0", empty_ip);
+	uchar readbuf[MAX_UDP_PAYLOAD];
+	uchar writebuf[MAX_UDP_PAYLOAD];
+	uchar source_ip[4], dest_ip[4];
+	Dot2IP("0.0.0.0", dest_ip);
 
-	if (next_tok == NULL){
-		printf("usage: tcpclient ip_source source_port ip_dest dest_port [-l]\n");
-		return;
-	}
-
-	
 	if (next_tok != NULL){
 		Dot2IP(next_tok, source_ip);
 		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpclient ip_source source_port ip_dest dest_port [-l]\n");
+		printf("usage: tcpclient ip_source source_port [ip_dest dest_port]\n");
 		return;
 	}
 
@@ -1276,68 +1270,51 @@ void tcpclientCmd()
 		source_port = gAtoi(next_tok);
 		next_tok = strtok(NULL, " \n");
 	} else {
-		printf("usage: tcpclient ip_source source_port ip_dest dest_port [-l]\n");
+		printf("usage: tcpclient ip_source source_port [ip_dest dest_port]\n");
 		return;
 	}
 
 	if (next_tok != NULL){
 		Dot2IP(next_tok, dest_ip);
 		next_tok = strtok(NULL, " \n");
-	} else {
-		printf("usage: tcpclient ip_source source_port ip_dest dest_port [-l]\n");
-		return;
-	}
-
-	if (next_tok != NULL) {
-		dest_port = gAtoi(next_tok);
-		next_tok = strtok(NULL, " \n");
-	} else {
-		printf("usage: tcpclient ip_source source_port ip_dest dest_port [-l]\n");
-		return;
-	}
-
-	if (next_tok != NULL){
-		if (!strcmp(next_tok, "-l"))
-		{
-			//listen mode open with empty dest
-			printf("[TCPOpenCMD]::Listening connection, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
-			TCPOpen(source_ip, source_port, empty_ip, empty_port);
+		if (next_tok != NULL) {
+			dest_port = gAtoi(next_tok);
+		} else {
+			printf("usage: tcpclient ip_source source_port [ip_dest dest_port]\n");
+			return;
 		}
 	} else {
-		//active mode
-		printf("[TCPOpenCMD]::Start connection, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
-		TCPOpen(source_ip, source_port, dest_ip, dest_port);
+		Dot2IP("0.0.0.0", dest_ip);
 	}
+
 	
-	while(1){
+	printf("[TCPOpenCMD]::Start connection, source ip address = %s, source port = %d, dest ip address = %s, dest port = %d\n", IP2Dot(tmpbuf, source_ip), source_port, IP2Dot(tmpbuf+20, dest_ip), dest_port);
+	tcptcb_t *conn = TCPOpen(source_ip, source_port, dest_ip, dest_port);	
+	
+	if (conn == NULL)
+		return;
+	
+	int len;
+	while(conn->tcp_state != TCP_CLOSED){
+		if (conn->tcp_state != TCP_ESTABLISHED)
+			continue;
 		printf("#");
-		//scanf("%[^\n]s", writebuf);
-		scanf("%s", writebuf);
-		printf("[tcpsend]::tcp send command, dest port = %d, dest IP = %s, own port = %d, Message = %s\n",dest_port,IP2Dot(tmpbuf,dest_ip), source_port, writebuf);
+		gets(writebuf);
+
 		if(!strcmp(writebuf, "quit")){
-			TCPClose(source_ip, source_port, dest_ip, dest_port);
+			TCPClose(source_ip, source_port, (conn->tcp_dest)->tcp_ip, (conn->tcp_dest)->tcp_port);
 			break;
 		}else{
-			//printf("Running tcpsend, Message = %s, len= %i\n",writebuf,strlen(writebuf) + 1);
-			TCPSend(source_ip, source_port, dest_ip, dest_port, writebuf, strlen(writebuf) + 1);
+			TCPSend(source_ip, source_port, (conn->tcp_dest)->tcp_ip, (conn->tcp_dest)->tcp_port, writebuf, strlen(writebuf) + 1);
 		}
-		//printf("TCPreceive::srcAddr:%s,srcPort:%i\n",IP2Dot(tmpbuf,source_ip),source_port);
-		int len = 0;
-		TCPReceive(source_ip, source_port, dest_ip, dest_port, readbuf, &len);
-		
-		if (len > 0){
-			printf("[TCPReceive]:: Payload: ");
-			int i; 
-			for (i = 0; i < len; i++){
-				if (readbuf[i] == '\0')
-					printf("\n");
-				else
-					printf("%c", readbuf[i]);
-			}
-			printf("\n");
-		} else {
-			//printf("[TCPReceive]:: Nothing in the receive buffer!\n");
+
+		len = 0;
+		TCPReceive(source_ip, source_port, (conn->tcp_dest)->tcp_ip, (conn->tcp_dest)->tcp_port, readbuf, &len);
+		if (len){		
+			printf("%s\n", readbuf);
+			readbuf[0] = '\0';
 		}
+				
 	}
 }
 

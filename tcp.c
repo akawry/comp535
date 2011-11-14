@@ -47,10 +47,13 @@ int TCPSendRST(gpacket_t *in_pkt){
 
 	int success = IPOutgoingPacket(in_pkt, NULL, NULL, 0, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPSendRST]:: Sent out following RST:\n");
-		printTCPPacket(in_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPSendRST]:: Sent out following RST:\n");
+			printTCPPacket(in_pkt);
+		}
 	} else {
-		printf("[TCPSendRST]:: Failed to send out RST!!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPSendRST]:: Failed to send out RST!!\n");
 	}
 	return success;
 }
@@ -61,11 +64,13 @@ void TCPResendConnectionRequest(int sig){
 	while (cur != NULL){
 		if (cur->tcp_state == TCP_SYN_SENT){
 			if (difftime(now, cur->syn_sent) < TCP_TIMEOUT){
-				printf("[TCPResendConnectionRequest]:: Resending connection request for ");
-				TCPPrintTCB(cur);
+				if (TCP_DEBUG == 1){
+					printf("[TCPResendConnectionRequest]:: Resending connection request for ");
+					TCPPrintTCB(cur);
+				}
 				TCPRequestConnection(cur);
 			} else {
-				printf("[TCPResendConnectionRequest]:: Connection attempt timed out!\n");
+				printf("[TCPResendConnectionRequest]:: Error: Connection attempt timed out!\n");
 				cur->tcp_state = TCP_LISTEN;
 				cur->syn_sent = NULL;
 			}
@@ -75,6 +80,8 @@ void TCPResendConnectionRequest(int sig){
 }
 
 void TCPResetConnection(tcptcb_t *con){
+	con->tcp_state = TCP_CLOSED;
+	
 	con->tcp_SND_UNA = 0;
 	con->tcp_SND_NXT = 0;
 	con->tcp_SND_WND = 0;
@@ -97,6 +104,7 @@ void TCPResetConnection(tcptcb_t *con){
 		free(cur);
 		cur = next;
 	}
+	con->tcp_send_queue = NULL;
 
 	cur = con->tcp_receieve_queue;
 	while (cur != NULL) {
@@ -104,8 +112,8 @@ void TCPResetConnection(tcptcb_t *con){
 		free(cur);
 		cur = next;
 	}
+	con->tcp_receieve_queue = NULL;
 
-	con->tcp_send_queue = NULL;
 	con->syn_sent = NULL;
 	con->fin_sent = NULL;
 	con->tcp_was_passive = 0;
@@ -135,10 +143,13 @@ int TCPAcknowledgeReceived(gpacket_t *in_pkt, tcptcb_t *con){
 	
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPAcknowledgeReceived]:: Sent following ACK: \n");
-		printTCPPacket(out_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPAcknowledgeReceived]:: Sent following ACK: \n");
+			printTCPPacket(out_pkt);
+		}
 	} else {
-		printf("[TCPAcknowledgeReceived]:: Failed to send out ACK!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeReceived]:: Failed to send out ACK!\n");
 	}
 	return success;
 }
@@ -211,14 +222,17 @@ gpacket_t *TCPNewPacket(tcptcb_t* con){
 }
 
 void TCPResendAllCloseRequests(int sig){
-	printf("[TCPResendAllCloseRequests]:: Resending any unACK'd close requests...\n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPResendAllCloseRequests]:: Resending any unACK'd close requests...\n");
 	tcptcb_t *cur = active_connections;
 	time_t now = time(NULL);
 	while (cur != NULL){
 		if (cur->tcp_state == TCP_FIN_WAIT_1){
 			if (difftime(now, cur->fin_sent) >= TCP_RTT){
-				printf("[TCPResendAllCloseRequests]:: Resending close request for ");
-				TCPPrintTCB(cur);
+				if (TCP_DEBUG == 1){
+					printf("[TCPResendAllCloseRequests]:: Resending close request for ");
+					TCPPrintTCB(cur);
+				}
 				TCPRequestClose(cur);
 			} 
 		} 
@@ -227,7 +241,8 @@ void TCPResendAllCloseRequests(int sig){
 }
 
 int TCPRequestClose(tcptcb_t *con){
-	printf("[TCPRequestClose]:: Requesting a close.\n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPRequestClose]:: Requesting a close.\n");
 
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
@@ -249,11 +264,14 @@ int TCPRequestClose(tcptcb_t *con){
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPRequestClose]:: Sent out the following request: \n");
-		printTCPPacket(out_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPRequestClose]:: Sent out the following request: \n");
+			printTCPPacket(out_pkt);
+		}
 		con->tcp_state = TCP_FIN_WAIT_1;
 	} else {
-		printf("[TCPRequestClose]:: Failed to send out close request!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPRequestClose]:: Failed to send out close request!\n");
 	}
 		
 
@@ -261,12 +279,15 @@ int TCPRequestClose(tcptcb_t *con){
 }
 
 void TCPSendLastAck(int sig){
-	printf("[TCPSendLastAck]:: Sending all final acknowledgements ... \n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPSendLastAck]:: Sending all final acknowledgements ... \n");
 	tcptcb_t *cur = active_connections;
 	while (cur != NULL){
 		if (cur->tcp_state == TCP_CLOSE_WAIT){
-			printf("[TCPSendLastAck]:: Sending last ACK for ");
-			TCPPrintTCB(cur);
+			if (TCP_DEBUG == 1){
+				printf("[TCPSendLastAck]:: Sending last ACK for ");
+				TCPPrintTCB(cur);
+			}
 
 			int iphdrlen = 20;
 			gpacket_t *out_pkt = TCPNewPacket(cur);
@@ -288,12 +309,14 @@ void TCPSendLastAck(int sig){
 }
 
 void TCPCloseWaiting(int sig){
-	printf("[TCPCloseWaiting]:: Closing all waiting connections ... \n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPCloseWaiting]:: Closing all waiting connections ... \n");
 	tcptcb_t *cur = active_connections;
 	while (cur != NULL){
 		if (cur->tcp_state == TCP_TIME_WAIT){
-			printf("[TCPCloseWaiting]:: Closing ");
-			TCPPrintTCB(cur);
+			printf("[TCPCloseWaiting]:: Closing connection...");
+			if (TCP_DEBUG == 1)
+				TCPPrintTCB(cur);
 			cur = TCPRemoveConnection(cur);
 		} else {
 			cur = cur->next;
@@ -302,8 +325,8 @@ void TCPCloseWaiting(int sig){
 }
 
 int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
-
-	printf("[TCPAcknowledgeCloseRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
+	if (TCP_DEBUG == 1)
+		printf("[TCPAcknowledgeCloseRequest]:: Acknowledging close request. Current state: %d\n", conn->tcp_state);
 
 	int iphdrlen = 20;
 	int next_state = conn->tcp_state;	
@@ -339,19 +362,22 @@ int TCPAcknowledgeCloseRequest(gpacket_t* in_pkt, tcptcb_t *conn){
 	
 	int success = IPOutgoingPacket(out_pkt, (conn->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPAcknowledgeCloseRequest]:: Updated state: %d. Sent out the following request: \n", next_state);
-		printTCPPacket(out_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPAcknowledgeCloseRequest]:: Updated state: %d. Sent out the following request: \n", next_state);
+			printTCPPacket(out_pkt);
+		}
 		conn->tcp_state = next_state;
 	} else {
-		printf("[TCPAcknowledgeCloseRequest]:: Failed to send out close request!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeCloseRequest]:: Failed to send out close request!\n");
 	}
 	
 	return success;
 }
 
 int TCPRequestConnection(tcptcb_t *con){
-	
-	printf("[TCPRequestConnection]:: Requesting a connection.\n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPRequestConnection]:: Requesting a connection.\n");
 
 	gpacket_t *out_pkt = TCPNewPacket(con);
 	ip_packet_t *ip_pkt = (ip_packet_t *)(out_pkt->data.data);
@@ -380,18 +406,22 @@ int TCPRequestConnection(tcptcb_t *con){
 	// send the pakcet to the ip module for further processing 	
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPRequestConnection]:: Sent out following request:\n");
-		printTCPPacket(out_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPRequestConnection]:: Sent out following request:\n");
+			printTCPPacket(out_pkt);
+		}
 		con->tcp_state = TCP_SYN_SENT;
 	} else {
-		printf("[TCPRequestConnection]:: Failed to send request!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPRequestConnection]:: Failed to send request!\n");
 	}
 	
 	return success;
 }
 
 int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
-	printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request. Connection state is %u\n", con->tcp_state);
+	if (TCP_DEBUG == 1)
+		printf("[TCPAcknowledgeConnectionRequest]:: Acknowledging connection request. Connection state is %u\n", con->tcp_state);
 
 	int iphdrlen = 20;
 	char tmpbuf[MAX_TMPBUF_LEN];
@@ -415,7 +445,8 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 	
 	// received first syn
 	if (con->tcp_state == TCP_LISTEN || con->tcp_state == TCP_SYN_RECEIVED){
-		printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeConnectionRequest]:: Second part of handshaking phase ...\n");
 		// set a random ISN for my sequence number
 		con->tcp_ISS = rand();
 		con->tcp_SND_NXT = con->tcp_ISS + 1;
@@ -427,7 +458,8 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 		
 	// third phase of handshake 
 	} else if (con->tcp_state == TCP_SYN_SENT){
-		printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeConnectionRequest]:: Third part of handshaking phase ...\n");
 		next_state = TCP_ESTABLISHED;
 		tcphdr_out->seq = tcphdr_in->ack_seq;
 		con->tcp_SND_UNA = tcphdr_in->ack_seq;
@@ -447,14 +479,16 @@ int TCPAcknowledgeConnectionRequest(gpacket_t *in_pkt, tcptcb_t* con){
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, TCP_HEADER_LENGTH + (tcphdr_out->doff*4 - TCP_HEADER_LENGTH), 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeConnectionRequest]:: Sent out following ACK:\n");
 		con->tcp_state = next_state;
 		printTCPPacket(out_pkt);
 
 		if (con->tcp_state == TCP_ESTABLISHED)
 			printf("[TCPAcknowledgeConnectionRequest]:: Connection established ...\n");
 	} else {
-		printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPAcknowledgeConnectionRequest]:: Failed to send out ACK!\n");
 	}
 
 	return success;
@@ -505,7 +539,7 @@ tcpsocket_t *TCPNewSocket(uchar ip[], uint16_t port){
 
 	tcpsocket_t* socket;
 	if ((socket = (tcpsocket_t *)malloc(sizeof(tcpsocket_t))) == NULL){
-		printf("[TCPNewSocket]:: Not enough room for socket\n");
+		printf("[TCPNewSocket]:: Error: Not enough room for socket\n");
 		return NULL;
 	}
 	int i;
@@ -517,7 +551,7 @@ tcpsocket_t *TCPNewSocket(uchar ip[], uint16_t port){
 tcptcb_t *TCPNewConnection(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 	tcptcb_t *con;
 	if ((con = (tcptcb_t *)malloc(sizeof(tcptcb_t))) == NULL){
-		printf("[TCPNewConnection]:: Not enough room for connection\n");
+		printf("[TCPNewConnection]:: Error: Not enough room for connection\n");
 		return NULL;
 	}
 	con->tcp_source = TCPNewSocket(src_ip, src_port);
@@ -578,7 +612,8 @@ void TCPEnqueueSend(gpacket_t *out, tcptcb_t *con){
 }
 
 void TCPResendAll(int sig){
-	printf("[TCPResendAll]:: Resending out all un ACK'd packets ...\n");////Added resend check
+	if (TCP_DEBUG == 1)
+		printf("[TCPResendAll]:: Resending out all un ACK'd packets ...\n");////Added resend check
 	tcptcb_t *cur = active_connections;
 	time_t now = time(NULL);
 	int found = 0;	
@@ -588,7 +623,8 @@ void TCPResendAll(int sig){
 		tcpresend_t *q = cur->tcp_send_queue;
 		while (q != NULL){
 			if (difftime(now, q->time_enqueued) > TCP_RTT){	
-				printf("[TCPResendAll]::Resending seq number: %d\n", q->seq);////Added resend check
+				if (TCP_DEBUG == 1)
+					printf("[TCPResendAll]::Resending seq number: %d\n", q->seq);////Added resend check
 				found = 1;
 				IPOutgoingPacket(q->pkt, (cur->tcp_dest)->tcp_ip, q->len + TCP_HEADER_LENGTH, 1, TCP_PROTOCOL);
 			}
@@ -737,8 +773,10 @@ void TCPWriteToReceiveBuffer(tcptcb_t *con, gpacket_t *in){
 	ip_packet_t *ip_pkt = (ip_packet_t *)in->data.data; 
 	tcphdr_t *tcphdr = (tcphdr_t *)((uchar *)ip_pkt + ip_pkt->ip_hdr_len * 4);
 	int len_tcp = ntohs(ip_pkt->ip_pkt_len) - (ip_pkt->ip_hdr_len * 4 + tcphdr->doff * 4);
-	printf("[TCPWriteToReceiveBuffer]:: About to write %d bytes to buffer ... \n", len_tcp);
-	printf("%s\n", (uchar *)tcphdr + tcphdr->doff * 4);	
+	if (TCP_DEBUG == 1){
+		printf("[TCPWriteToReceiveBuffer]:: About to write %d bytes to buffer ... \n", len_tcp);
+		printf("%s\n", (uchar *)tcphdr + tcphdr->doff * 4);
+	}	
 	memcpy(buffer + i, (uchar *)tcphdr + tcphdr->doff * 4, len_tcp); 
 }
 
@@ -753,7 +791,8 @@ int TCPReceive(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest
 	tcptcb_t *con = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	
 	if (con != NULL){
-		printf("[TCPReceive]:: Copying into buffer ... \n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPReceive]:: Copying into buffer ... \n");
 		int i = 0; char c; while (i < TCP_MAX_WIN_SIZE && ((c = con->rcv_buff[i]) != NULL)) i++;
 		if (i > 0){ 
 			memcpy(recv_buff, con->rcv_buff, i - 1);
@@ -804,8 +843,10 @@ int TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_por
 
 	int success = IPOutgoingPacket(out_pkt, (con->tcp_dest)->tcp_ip, tcphdr->doff * 4 + len, 1, TCP_PROTOCOL);
 	if (success == EXIT_SUCCESS){
-		printf("[TCPSend]:: Sent out the following request: \n");
-		printTCPPacket(out_pkt);
+		if (TCP_DEBUG == 1){
+			printf("[TCPSend]:: Sent out the following request: \n");
+			printTCPPacket(out_pkt);
+		}
 		
 		//after transmission, put on the unacked list
 		TCPEnqueueSend(out_pkt, con);
@@ -815,12 +856,14 @@ int TCPSend(uchar src_ip[],uint16_t src_port, uchar dest_ip[], uint16_t dest_por
 		alarm (TCP_RTT);
 		
 	} else {
-		printf("[TCPSend]:: Failed to sent out the following request: \n");
+		if (TCP_DEBUG == 1){
+			printf("[TCPSend]:: Failed to sent out the following request: \n");
+		}
 	}
 
 }
 
-int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
+tcptcb_t *TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
 
 	tcptcb_t *tcp_conn = TCPGetConnection(src_ip, src_port, dest_ip, dest_port);
 	if (tcp_conn == NULL){
@@ -835,8 +878,8 @@ int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 
 		// passive OPEN, so listen for requests
 		if (TCPIsPassive(tcp_conn->tcp_dest)){
-
-			printf("[TCPOpen]:: Was a passive OPEN ... start listening ... \n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPOpen]:: Was a passive OPEN ... start listening ... \n");
 			tcp_conn->tcp_state = TCP_LISTEN;
 			tcp_conn->tcp_was_passive = 1;
 
@@ -846,11 +889,11 @@ int TCPOpen(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_po
 			TCPRequestConnection(tcp_conn);
 		}
 
-		return EXIT_SUCCESS;
-	} else {
-		printf("[TCPOpen]:: Error: connection already exists.");
-		return EXIT_FAILURE;
+		return tcp_conn;
 	}
+
+	printf("[TCPOpen]:: Error: connection already exists.");
+	return NULL;
 }
 
 int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_port){
@@ -866,8 +909,10 @@ int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_p
 			// have a socket passively waiting and still in the listen state 
 			if (TCPIsPassive(cur->tcp_dest)){
 				found = 1;
-				printf("[TCPClose]:: Closing connection: ");
-				TCPPrintTCB(cur);
+				if (TCP_DEBUG == 1){
+					printf("[TCPClose]:: Closing connection: ");
+					TCPPrintTCB(cur);
+				}
 				cur = TCPRemoveConnection(cur);
 				
 			// have a socket waiting with exact destination socket
@@ -892,7 +937,8 @@ int TCPClose(uchar src_ip[], uint16_t src_port, uchar dest_ip[], uint16_t dest_p
 }
 		
 int TCPProcess(gpacket_t *in_pkt){
-	printf("[TCPProcess]:: packet received for processing\n");
+	if (TCP_DEBUG == 1)
+		printf("[TCPProcess]:: packet received for processing\n");
 	printTCPPacket(in_pkt);
 	uchar tmpbuff[MAX_TMPBUF_LEN];
 
@@ -917,12 +963,15 @@ int TCPProcess(gpacket_t *in_pkt){
 
 	// no TCB's waiting for where the packet came from 
 	if (conn == NULL){
-		printf("[TCPProcess]:: No one listening on destination ip and port.... \n");
+		if (TCP_DEBUG == 1)
+			printf("[TCPProcess]:: No one listening on destination ip and port.... \n");
 		if (tcphdr->RST != 1){
-			printf("[TCPProcess]:: Sending out an RST\n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Sending out an RST\n");
 			TCPSendRST(in_pkt);
 		} else {
-			printf("[TCPProcess]:: Ignoring packet ... \n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Ignoring packet ... \n");
 		}
 		return EXIT_FAILURE;
 	}
@@ -931,12 +980,14 @@ int TCPProcess(gpacket_t *in_pkt){
 	if (conn->tcp_state == TCP_LISTEN){
 		
 		if (tcphdr->RST == 1){
-			printf("[TCPProcess]:: Incoming RST packet. Ignoring ... \n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Incoming RST packet. Ignoring ... \n");
 			return EXIT_FAILURE;
 		} 
 
 		if (tcphdr->ACK == 1){
-			printf("[TCPProcess]:: Sending out an RST\n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Sending out an RST\n");
 			TCPSendRST(in_pkt);
 			return EXIT_FAILURE;
 		}
@@ -950,11 +1001,13 @@ int TCPProcess(gpacket_t *in_pkt){
 	
 		if (tcphdr->ACK == 1){
 			if (tcphdr->RST == 1){
-				printf("[TCPProcess]:: Received RST packet. Ignoring ... \n");
+				if (TCP_DEBUG == 1)
+					printf("[TCPProcess]:: Received RST packet. Ignoring ... \n");
 				return EXIT_FAILURE;
 			} else {
 				if (ntohl(tcphdr->ack_seq) <= conn->tcp_ISS || ntohl(tcphdr->ack_seq) > conn->tcp_SND_NXT){
-					printf("[TCPProcess]:: Received unexpected packet ... resetting connection. \n");
+					if (TCP_DEBUG == 1)
+						printf("[TCPProcess]:: Received unexpected packet ... resetting connection. \n");
 					TCPSendRST(in_pkt);
 					return EXIT_FAILURE;
 				}
@@ -980,7 +1033,8 @@ int TCPProcess(gpacket_t *in_pkt){
 				TCPAcknowledgeReceived(in_pkt, conn);
 				return EXIT_SUCCESS;
 			} else {
-				printf("[TCPProcess]:: Received RST packet. Ignoring ... \n");
+				if (TCP_DEBUG == 1)
+					printf("[TCPProcess]:: Received RST packet. Ignoring ... \n");
 			}
 
 		} 
@@ -1012,7 +1066,8 @@ int TCPProcess(gpacket_t *in_pkt){
 		}
 
 		if (tcphdr->ACK == 0){
-			printf("[TCPProcess]:: Incoming packet had off ACK ... dropping\n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Incoming packet had off ACK ... dropping\n");
 			return EXIT_FAILURE;
 		} else {
 			if (conn->tcp_state == TCP_SYN_RECEIVED){	
@@ -1057,7 +1112,8 @@ int TCPProcess(gpacket_t *in_pkt){
 		}
 
 		if (tcp_len - tcphdr->doff * 4 > 0){
-			printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
+			if (TCP_DEBUG == 1)
+				printf("[TCPProcess]:: Received segment within receive window ... enqueuing.\n");
 			TCPEnqueueReceived(in_pkt, conn);
 			TCPAcknowledgeReceived(in_pkt, conn);
 			TCPShiftQueue(conn);
@@ -1065,7 +1121,8 @@ int TCPProcess(gpacket_t *in_pkt){
 
 		if (tcphdr->FIN == 1){
 			if (conn->tcp_state == TCP_LISTEN || conn->tcp_state == TCP_SYN_SENT){
-				printf("[TCPProcess]:: Ignoring FIN ... \n");
+				if (TCP_DEBUG == 1)
+					printf("[TCPProcess]:: Ignoring FIN ... \n");
 				return EXIT_FAILURE;
 			} 
 
