@@ -1,11 +1,11 @@
 Ext.require([
 	'Ext.grid.Panel',
-	'GiniJS.stores.PropertyStore'
+	'GiniJS.store.PropertyStore'
 ]);
 
-Ext.define('GiniJS.views.PropertyView', {
+Ext.define('GiniJS.view.PropertyView', {
 	extend: 'Ext.grid.Panel',
-	store: 'GiniJS.stores.PropertyStore',
+	store: 'GiniJS.store.PropertyStore',
 	columns: [{
 		id: 'property',
 		header: 'Property',

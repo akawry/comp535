@@ -3,7 +3,7 @@ Ext.require([
 	'Ext.data.Store'
 ]);
 
-Ext.define('GiniJS.models.Property', {
+Ext.define('GiniJS.model.Property', {
 	extend: 'Ext.data.Model',
 	fields: [{
 		name: 'property'
@@ -13,6 +13,6 @@ Ext.define('GiniJS.models.Property', {
 });
 
 Ext.create('Ext.data.Store', {
-	model: 'GiniJS.models.Property',
-	storeId: 'GiniJS.stores.PropertyStore'
+	model: 'GiniJS.model.Property',
+	storeId: 'GiniJS.store.PropertyStore'
 });

@@ -1,33 +1,25 @@
 Ext.require([
 	'Ext.panel.Panel',
 	'Ext.view.View',
-	'GiniJS.stores.ComponentStore'
+	'GiniJS.store.ComponentStore'
 ]);
 
 var componentTpl = new Ext.XTemplate(
 	'<tpl for=".">',
 		'<div class="thumb-wrap" style="padding: 1em;">',
-      '<div class="thumb" class="componentIcon" id="{type}"><img src="{icon}"></div>',
+      '<div class="thumb" class="componentIcon"><img src="{icon}"></div>',
       '<span>{type}</span></div>',
    '</tpl>'
 );
 
-var commonComponentTpl = new Ext.XTemplate(
-	'<tpl for=".">',
-		'<div class="thumb-wrap" style="padding: 1em;">',
-      '<div class="thumb" class="componentIcon" id="common_{type}"><img src="{icon}"></div>',
-      '<span>{type}</span></div>',
-   '</tpl>'
-);
-
-Ext.define('GiniJS.views.ComponentView', {
+Ext.define('GiniJS.view.ComponentView', {
 	extend: 'Ext.panel.Panel',
 	layout: {
 		type: 'accordion'
 	},
 	listeners : {
 		afterrender : function(){
-			var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+			var store = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore');
 			store.clearFilter();
 			store.filter(function(rec){
 				return rec.get('common') === true;
@@ -41,7 +33,7 @@ Ext.define('GiniJS.views.ComponentView', {
 		itemId: 'commonView',
 		listeners : {
 			'beforeexpand' : function(){
-				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+				var store = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore');
 				store.clearFilter();
 				store.filter(function(rec){
 					return rec.get('common') === true;
@@ -49,8 +41,8 @@ Ext.define('GiniJS.views.ComponentView', {
 			}
 		},
 		items: [Ext.create('Ext.view.View', {
-			store: 'GiniJS.stores.ComponentStore',
-			tpl: commonComponentTpl,
+			store: 'GiniJS.store.ComponentStore',
+			tpl: componentTpl,
 			itemSelector: 'div.thumb-wrap',
 			overItemCls: 'x-item-over',
 			multiSelect: false,
@@ -64,7 +56,7 @@ Ext.define('GiniJS.views.ComponentView', {
 		itemId: 'hostView',
 		listeners : {
 			'beforeexpand' : function(){
-				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+				var store = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore');
 				store.clearFilter();
 				store.filter(function(rec){
 					return rec.get('category') === "host";
@@ -72,7 +64,7 @@ Ext.define('GiniJS.views.ComponentView', {
 			}
 		},
 		items: [Ext.create('Ext.view.View', {
-			store: 'GiniJS.stores.ComponentStore',
+			store: 'GiniJS.store.ComponentStore',
 			tpl: componentTpl,
 			itemSelector: 'div.thumb-wrap',
 			overItemCls: 'x-item-over',
@@ -87,7 +79,7 @@ Ext.define('GiniJS.views.ComponentView', {
 		itemId: 'netView',
 		listeners : {
 			'beforeexpand' : function(){
-				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+				var store = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore');
 				store.clearFilter();
 				store.filter(function(rec){
 					return rec.get('category') === "net";
@@ -95,7 +87,7 @@ Ext.define('GiniJS.views.ComponentView', {
 			}  
 		},
 		items: [Ext.create('Ext.view.View', {
-			store: 'GiniJS.stores.ComponentStore',
+			store: 'GiniJS.store.ComponentStore',
 			tpl: componentTpl,
 			itemSelector: 'div.thumb-wrap',
 			overItemCls: 'x-item-over',
@@ -110,7 +102,7 @@ Ext.define('GiniJS.views.ComponentView', {
 function initializeComponentDragZone(v) {
     v.dragZone = Ext.create('Ext.dd.DragZone', v.getEl(), {
         getDragData: function(e) {
-            var sourceEl = e.getTarget(v.itemSelector, 10), d;
+            var sourceEl = e.getTarget(v.itemSelector), d;
             if (sourceEl) {
                 d = sourceEl.cloneNode(true);
                 d.id = Ext.id();

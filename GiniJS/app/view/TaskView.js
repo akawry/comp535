@@ -1,13 +1,13 @@
 Ext.require([
 	'Ext.window.Window',
-	'GiniJS.stores.TaskStore'
+	'GiniJS.store.TaskStore'
 ]);
 
-Ext.define('GiniJS.views.TaskView', {
+Ext.define('GiniJS.view.TaskView', {
 	extend: 'Ext.window.Window',
 	items: [
 		Ext.create('Ext.grid.Panel', {
-			store: 'GiniJS.stores.TaskStore',
+			store: 'GiniJS.store.TaskStore',
 			columns: [{
 				id: 'name',
 				header: 'Name',

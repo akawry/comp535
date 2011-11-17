@@ -1,11 +1,11 @@
 Ext.require([
 	'Ext.grid.Panel',
-	'GiniJS.stores.InterfaceStore'
+	'GiniJS.store.InterfaceStore'
 ]);
 
-Ext.define('GiniJS.views.InterfaceView', {
+Ext.define('GiniJS.view.InterfaceView', {
 	extend: 'Ext.grid.Panel',
-	store: 'GiniJS.stores.InterfaceStore',
+	store: 'GiniJS.store.InterfaceStore',
 	columns: [{
 		id: 'mac',
 		header: 'Mac',

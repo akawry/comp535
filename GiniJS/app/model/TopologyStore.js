@@ -3,7 +3,7 @@ Ext.require([
 	'Ext.data.Model'
 ]);
 
-Ext.define('GiniJS.models.TopologyNode', {
+Ext.define('GiniJS.model.TopologyNode', {
 	extend: 'Ext.data.Model',
 	fields: [{
 		name: 'kind'
@@ -17,6 +17,6 @@ Ext.define('GiniJS.models.TopologyNode', {
 });
 
 Ext.create('Ext.data.Store', {
-	model: 'GiniJS.models.TopologyNode',
-	storeId: 'GiniJS.models.TopologyNode'
+	model: 'GiniJS.model.TopologyNode',
+	storeId: 'GiniJS.model.TopologyNode'
 });

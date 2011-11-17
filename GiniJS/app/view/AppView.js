@@ -1,24 +1,24 @@
 Ext.require([
 	'Ext.container.Viewport',
-	'GiniJS.views.Menu',
-	'GiniJS.views.TaskView',
-	'GiniJS.views.PropertyView',
-	'GiniJS.views.LogView',
-	'GiniJS.views.ComponentView',
-	'GiniJS.views.Console',
-	'GiniJS.views.CanvasView'
+	'GiniJS.view.Menu',
+	'GiniJS.view.TaskView',
+	'GiniJS.view.PropertyView',
+	'GiniJS.view.LogView',
+	'GiniJS.view.ComponentView',
+	'GiniJS.view.Console',
+	'GiniJS.view.CanvasView'
 ]);
 
-Ext.define('GiniJS.views.AppView', {
+Ext.define('GiniJS.view.AppView', {
 	constructor : function(config){
-		this.taskManager = Ext.create('GiniJS.views.TaskView', {
+		this.taskManager = Ext.create('GiniJS.view.TaskView', {
 			title: 'Task Manager',
 			minWidth: 100,
 			width: 300,
 		});			
 		this.taskManager.show();
 		
-		this.sampleConsole = Ext.create('GiniJS.views.Console', {
+		this.sampleConsole = Ext.create('GiniJS.view.Console', {
 			title: 'Sample Console',
 			minWidth: 300,
 			minHeight: 300,
@@ -27,7 +27,7 @@ Ext.define('GiniJS.views.AppView', {
 		});
 		this.sampleConsole.show();				
 		
-		GiniJS.views.AppView.superclass.constructor.call(this, config);
+		GiniJS.view.AppView.superclass.constructor.call(this, config);
 	},
 	extend: 'Ext.container.Viewport',	
 	plain: true, 
@@ -39,7 +39,7 @@ Ext.define('GiniJS.views.AppView', {
 	},
 	items: [{
 		region: 'north',
-		items: [Ext.create('GiniJS.views.Menu')]
+		items: [Ext.create('GiniJS.view.Menu')]
 	}, {
 		region: 'west',
 		layout: {
@@ -47,7 +47,7 @@ Ext.define('GiniJS.views.AppView', {
 		},
 		minWidth: 200,
 		width: 200,
-		items: [Ext.create('GiniJS.views.ComponentView')]
+		items: [Ext.create('GiniJS.view.ComponentView')]
 	}, {
 		region: 'south',
 		minHeight: 200,
@@ -55,7 +55,7 @@ Ext.define('GiniJS.views.AppView', {
 		layout: {
 			type: 'fit'
 		},
-		items: [Ext.create('GiniJS.views.LogView', {
+		items: [Ext.create('GiniJS.view.LogView', {
 			title: 'Log',
 			minHeight: 200
 		})]
@@ -66,13 +66,13 @@ Ext.define('GiniJS.views.AppView', {
 			type: 'vbox',
 			align: 'stretch'
 		},
-		items: [Ext.create('GiniJS.views.PropertyView', {
+		items: [Ext.create('GiniJS.view.PropertyView', {
 			flex: 1,
 			title: 'Properties',
 			minWidth: 200,
 			width: 200
 		}),
-		Ext.create('GiniJS.views.InterfaceView', {
+		Ext.create('GiniJS.view.InterfaceView', {
 			flex: 1,
 			title: 'Interfaces',
 			minWidth: 200,
@@ -84,7 +84,7 @@ Ext.define('GiniJS.views.AppView', {
 		layout: {
 			type: 'fit'
 		},
-		items: [Ext.create('GiniJS.views.CanvasView')]
+		items: [Ext.create('GiniJS.view.CanvasView')]
 	}],
 	
 		

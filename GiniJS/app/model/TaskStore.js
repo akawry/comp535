@@ -3,7 +3,7 @@ Ext.require([
 	'Ext.data.Store'
 ]);
 
-Ext.define('GiniJS.models.Task', {
+Ext.define('GiniJS.model.Task', {
 	extend: 'Ext.data.Model',
 	fields: [{
 		name: 'name',
@@ -18,6 +18,6 @@ Ext.define('GiniJS.models.Task', {
 });
 
 Ext.create('Ext.data.Store', {
-	model: 'GiniJS.models.Task',
-	storeId: 'GiniJS.stores.TaskStore'
+	model: 'GiniJS.model.Task',
+	storeId: 'GiniJS.store.TaskStore'
 });

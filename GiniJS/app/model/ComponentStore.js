@@ -1,4 +1,4 @@
-Ext.define('GiniJS.models.Component', {
+Ext.define('GiniJS.model.Component', {
 	extend: 'Ext.data.Model',
 	idProperty: 'type',
 	fields: [{
@@ -15,8 +15,8 @@ Ext.define('GiniJS.models.Component', {
 });
 
 Ext.create('Ext.data.Store', {
-	model: 'GiniJS.models.Component',
-	storeId: 'GiniJS.stores.ComponentStore',
+	model: 'GiniJS.model.Component',
+	storeId: 'GiniJS.store.ComponentStore',
 	
 	data: [{
 		type: 'Router', icon: 'app/resources/images/Router.gif', category: 'net', common: true, id: Ext.id()

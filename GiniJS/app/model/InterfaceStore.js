@@ -1,4 +1,4 @@
-Ext.define('GiniJS.models.Interface', {
+Ext.define('GiniJS.model.Interface', {
 	extend: 'Ext.data.Model',
 	fields: [{
 		name: 'mac'
@@ -10,6 +10,6 @@ Ext.define('GiniJS.models.Interface', {
 });
 
 Ext.create('Ext.data.Store', {
-	model: 'GiniJS.models.Interface',
-	storeId: 'GiniJS.stores.InterfaceStore'
+	model: 'GiniJS.model.Interface',
+	storeId: 'GiniJS.store.InterfaceStore'
 });

@@ -8,7 +8,7 @@ var handleKeyPress = function(field, e, eOpts){
 	}
 };
 
-Ext.define('GiniJS.views.Console', {
+Ext.define('GiniJS.view.Console', {
 	extend: 'Ext.window.Window',
 	layout: {
 		type: 'vbox',

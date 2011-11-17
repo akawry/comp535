@@ -3,11 +3,12 @@ Ext.require([
 	'Ext.menu.Menu'
 ]);
 
-Ext.define('GiniJS.views.Menu', {
+Ext.define('GiniJS.view.Menu', {
 	extend: 'Ext.toolbar.Toolbar',
 	items: [{
 		text: 'File',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'file',
 			items: [{
 				text: 'New'
 			}, {
@@ -29,6 +30,7 @@ Ext.define('GiniJS.views.Menu', {
 	}, {
 		text: 'Project',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'project',
 			items: [{
 				text: 'New'
 			}, {
@@ -40,6 +42,7 @@ Ext.define('GiniJS.views.Menu', {
 	}, {
 		text: 'Edit',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'edit',
 			items: [{
 				text: 'Copy'
 			}, {
@@ -53,6 +56,7 @@ Ext.define('GiniJS.views.Menu', {
 	}, {
 		text: 'Run',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'run',
 			items: [{
 				text: 'Compile'
 			}, {
@@ -66,6 +70,7 @@ Ext.define('GiniJS.views.Menu', {
 	}, {
 		text: 'Config',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'config',
 			items: [{	
 				text: 'Options'
 			}]
@@ -73,6 +78,7 @@ Ext.define('GiniJS.views.Menu', {
 	}, {
 		text: 'Help',
 		menu: Ext.create('Ext.menu.Menu', {
+			type: 'help',
 			items: [{
 				text: 'Tutorial'
 			}, {

@@ -1,12 +1,12 @@
 Ext.require('Ext.panel.Panel');
 
-Ext.define('GiniJS.views.LogView', {
-	id : "GiniJS.views.LogView",
+Ext.define('GiniJS.view.LogView', {
+	id : "GiniJS.view.LogView",
+	extend: 'Ext.panel.Panel',
 	constructor: function(config){
 		this.logContainerId = Ext.id();
-		GiniJS.views.LogView.superclass.constructor.call(this, config);	
+		GiniJS.view.LogView.superclass.constructor.call(this, config);	
 	},
-	extend: 'Ext.panel.Panel',
 	html: new Ext.XTemplate('<div id="{id}" style="font-family: Courier"></div>').apply({
 		id: this.logContainerId
 	}),

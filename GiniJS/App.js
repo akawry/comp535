@@ -3,19 +3,15 @@ Ext.Loader.setConfig({
 	disableCaching: false,
 	paths: {
 		'GiniJS' : 'app',
-		'GiniJS.stores' : 'app/model'
+		'GiniJS.store' : 'app/model'
 	}
 });
-Ext.require(['*']);
 
-Ext.ns('GiniJS');
-GiniJS.log = function(msg, cmp){
-	Ext.getCmp("GiniJS.views.LogView").log({
-    	message: msg,
-    	origin: cmp
-   });
-};
-
-Ext.onReady(function() {
-	Ext.create('GiniJS.views.AppView');
+Ext.application({
+	name: 'GiniJS',
+	controllers: ['TopologyController', 'ActionController'],
+	launch : function(){
+		console.log("Launching GiniJS...");
+		Ext.create('GiniJS.view.AppView');
+	}
 });
