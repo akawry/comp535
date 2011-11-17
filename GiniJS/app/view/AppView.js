@@ -81,9 +81,7 @@ Ext.define('GiniJS.view.AppView', {
 	}, {
 		region: 'center',
 		xtype: 'panel',
-		layout: {
-			type: 'fit'
-		},
+		layout: 'fit',
 		items: [Ext.create('GiniJS.view.CanvasView')]
 	}],
 	

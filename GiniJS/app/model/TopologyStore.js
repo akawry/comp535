@@ -13,6 +13,8 @@ Ext.define('GiniJS.model.TopologyNode', {
 		name: 'y'
 	}, {
 		name: 'connections'
+	}, {
+		name : 'info' // JSON object storing additional info such as ipv4, mac, etc
 	}]
 });
 

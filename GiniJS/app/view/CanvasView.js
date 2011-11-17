@@ -4,8 +4,8 @@ Ext.require([
 
 Ext.define('GiniJS.view.CanvasView', {
 	extend: 'Ext.draw.Component',
-	itemId: 'GiniJS.view.CanvasView',
 	alias: 'widget.canvasview',
+	viewBox: false,
 	listeners : {
 		'afterrender' : function(){
 			if (!this.dropZone){
@@ -13,7 +13,7 @@ Ext.define('GiniJS.view.CanvasView', {
 				this.dropZone = new Ext.dd.DropTarget(this.getEl().dom, {
 					notifyDrop  : function(ddSource, e, data){
 						console.log("Received drop: ", ddSource, e, data);
-						me.fireEvent('insertnode', data);
+						me.fireEvent('insertnode', ddSource, e, data, me);
 						return true;
 					}
 				});

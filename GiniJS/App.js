@@ -9,6 +9,7 @@ Ext.Loader.setConfig({
 
 Ext.application({
 	name: 'GiniJS',
+	views: ['GiniJS.view.AppView'],
 	controllers: ['TopologyController', 'ActionController'],
 	launch : function(){
 		console.log("Launching GiniJS...");
