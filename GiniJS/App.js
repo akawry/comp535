@@ -7,9 +7,12 @@ Ext.Loader.setConfig({
 	}
 });
 
+// Init the singleton.  Any tag-based quick tips will start working.
+Ext.tip.QuickTipManager.init();
+
 Ext.application({
 	name: 'GiniJS',
-	views: ['GiniJS.view.AppView'],
+	views: ['AppView'],
 	controllers: ['TopologyController', 'ActionController'],
 	launch : function(){
 		console.log("Launching GiniJS...");

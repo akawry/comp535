@@ -6,19 +6,17 @@ Ext.require([
 Ext.define('GiniJS.model.TopologyNode', {
 	extend: 'Ext.data.Model',
 	fields: [{
-		name: 'kind'
+		name: 'node'
 	}, {
-		name: 'x'
+		name: 'properties'
 	}, {
-		name: 'y'
+		name: 'interfaces'
 	}, {
 		name: 'connections'
-	}, {
-		name : 'info' // JSON object storing additional info such as ipv4, mac, etc
 	}]
 });
 
 Ext.create('Ext.data.Store', {
 	model: 'GiniJS.model.TopologyNode',
-	storeId: 'GiniJS.model.TopologyNode'
+	storeId: 'GiniJS.store.TopologyStore'
 });

@@ -13,7 +13,9 @@ Ext.define('GiniJS.view.CanvasView', {
 				this.dropZone = new Ext.dd.DropTarget(this.getEl().dom, {
 					notifyDrop  : function(ddSource, e, data){
 						console.log("Received drop: ", ddSource, e, data);
-						me.fireEvent('insertnode', ddSource, e, data, me);
+						if (data.componentData){
+							me.fireEvent('insertnode', ddSource, e, data, me);
+						}
 						return true;
 					}
 				});
