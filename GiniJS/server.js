@@ -6,7 +6,7 @@ app.get('/', function(req, res){
 });
 
 app.get(/.*\.js/, function(req, res){
-	console.log("Serving static js file: %s\n", req.url);
+	console.log("Serving static js file: %s", req.url);
 	res.sendfile(__dirname + '/' + req.url);
 });
 
@@ -15,4 +15,6 @@ app.get(/.*\.(gif|png)/, function(req, res){
 	res.sendfile(__dirname + '/' + req.url);
 });
 
-app.listen(9000);
+app.listen(9000, function(){
+	console.log("listening on port 9000...");
+});

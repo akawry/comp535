@@ -6,9 +6,9 @@ Ext.require([
 
 var componentTpl = new Ext.XTemplate(
 	'<tpl for=".">',
-		'<div class="thumb-wrap">',
+		'<div class="thumb-wrap" style="padding: 1em;">',
       '<div class="thumb"><img src="{icon}"></div>',
-      '<span>{type}</span></div>',
+      '<span style="display: inline-block; width: 100%; text-align: center;">{type}</span></div>',
    '</tpl>'
 );
 
@@ -17,35 +17,71 @@ Ext.define('GiniJS.views.ComponentView', {
 	layout: {
 		type: 'accordion'
 	},
-	items: [Ext.create('Ext.panel.Panel', {
+	listeners : {
+		afterrender : function(){
+			var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+			store.clearFilter();
+			store.filter(function(rec){
+				return rec.get('common') === true;
+			});
+		}
+	},	
+	items: [{
+		xtype: 'panel',
 		title: 'Common',
-		store: 'GiniJS.stores.ComponentStore',
-		tpl: componentTpl,
-		itemSelector: 'div.thumb-wrap',
-		overItemCls: 'x-item-over',
-		multiSelect: false,
 		listeners : {
-			'expand' : function(){
+			'beforeexpand' : function(){
 				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
 				store.clearFilter();
 				store.filter(function(rec){
 					return rec.get('common') === true;
 				});
 			}
-		}
-	}), Ext.create('Ext.panel.Panel', {
+		},
+		items: [Ext.create('Ext.view.View', {
+			store: 'GiniJS.stores.ComponentStore',
+			tpl: componentTpl,
+			itemSelector: 'div.thumb-wrap',
+			overItemCls: 'x-item-over',
+			multiSelect: false
+		})]
+	}, {
+		xtype: 'panel',
 		title: 'Host',
-		store: 'GiniJS.stores.ComponentStore',
-		tpl: componentTpl,
-		itemSelector: 'div.thumb-wrap',
-		overItemCls: 'x-item-over',
-		multiSelect: false
-	}), Ext.create('Ext.panel.Panel', {
+		listeners : {
+			'beforeexpand' : function(){
+				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+				store.clearFilter();
+				store.filter(function(rec){
+					return rec.get('category') === "host";
+				});
+			}
+		},
+		items: [Ext.create('Ext.view.View', {
+			store: 'GiniJS.stores.ComponentStore',
+			tpl: componentTpl,
+			itemSelector: 'div.thumb-wrap',
+			overItemCls: 'x-item-over',
+			multiSelect: false
+		})]
+	}, {
+		xtype: 'panel',
 		title: 'Net',
-		store: 'GiniJS.stores.ComponentStore',
-		tpl: componentTpl,
-		itemSelector: 'div.thumb-wrap',
-		overItemCls: 'x-item-over',
-		multiSelect: false
-	})]
+		listeners : {
+			'beforeexpand' : function(){
+				var store = Ext.data.StoreManager.lookup('GiniJS.stores.ComponentStore');
+				store.clearFilter();
+				store.filter(function(rec){
+					return rec.get('category') === "net";
+				});
+			}
+		},
+		items: [Ext.create('Ext.view.View', {
+			store: 'GiniJS.stores.ComponentStore',
+			tpl: componentTpl,
+			itemSelector: 'div.thumb-wrap',
+			overItemCls: 'x-item-over',
+			multiSelect: false
+		})]
+	}]
 });
