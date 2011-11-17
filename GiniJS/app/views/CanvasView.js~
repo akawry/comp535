@@ -1,0 +1,21 @@
+Ext.require([
+	'Ext.draw.Component'
+]);
+
+Ext.define('GiniJS.views.CanvasView', {
+	extend: 'Ext.draw.Component',
+	listeners : {
+		'afterrender' : function(){
+			this.dropZone = new Ext.dd.DropTarget(this.getEl().dom, {
+				getTargetFromEvent: function(e) {
+            	return e.getTarget('.hospital-target');
+        		},
+				onNodeDrop : function(target, dd, e, data){
+					console.log(target, dd, e, data);
+					return true;
+				}
+			});
+		}
+	}
+});
+	

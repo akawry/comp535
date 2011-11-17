@@ -110,7 +110,7 @@ Ext.define('GiniJS.views.ComponentView', {
 function initializeComponentDragZone(v) {
     v.dragZone = Ext.create('Ext.dd.DragZone', v.getEl(), {
         getDragData: function(e) {
-            var sourceEl = e.getTarget(v.itemSelector), d;
+            var sourceEl = e.getTarget(v.itemSelector, 10), d;
             if (sourceEl) {
                 d = sourceEl.cloneNode(true);
                 d.id = Ext.id();
