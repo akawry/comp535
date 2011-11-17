@@ -1,3 +1,8 @@
+Ext.require([
+	'Ext.data.Model',
+	'Ext.data.Store'
+]);
+
 Ext.define('GiniJS.models.Task', {
 	extend: 'Ext.data.Model',
 	fields: [{

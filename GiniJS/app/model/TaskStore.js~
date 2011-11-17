@@ -16,4 +16,3 @@ Ext.create('Ext.data.Store', {
 	model: 'GiniJS.models.Task',
 	storeId: 'GiniJS.stores.TaskStore'
 });
-

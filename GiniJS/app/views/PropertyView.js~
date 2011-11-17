@@ -16,5 +16,8 @@ Ext.define('GiniJS.views.PropertyView', {
 		header: 'Value',
 		dataIndex: 'value',
 		flex: 1
-	}]
+	}],
+	
+	minWidth: 200,
+	width: 200
 });

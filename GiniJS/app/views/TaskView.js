@@ -5,9 +5,6 @@ Ext.require([
 
 Ext.define('GiniJS.views.TaskView', {
 	extend: 'Ext.window.Window',
-	title: 'Task Manager',
-	minWidth: 100,
-	width: 300,
 	items: [
 		Ext.create('Ext.grid.Panel', {
 			store: 'GiniJS.stores.TaskStore',
