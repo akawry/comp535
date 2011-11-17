@@ -5,7 +5,8 @@ Ext.require([
 	'GiniJS.views.PropertyView',
 	'GiniJS.views.LogView',
 	'GiniJS.views.ComponentView',
-	'GiniJS.views.Console'
+	'GiniJS.views.Console',
+	'GiniJS.views.CanvasView'
 ]);
 
 Ext.define('GiniJS.views.AppView', {
@@ -79,6 +80,11 @@ Ext.define('GiniJS.views.AppView', {
 		})]
 	}, {
 		region: 'center',
+		xtype: 'panel',
+		layout: {
+			type: 'fit'
+		},
+		items: [Ext.create('GiniJS.views.CanvasView')]
 	}],
 	
 		
