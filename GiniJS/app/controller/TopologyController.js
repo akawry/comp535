@@ -23,25 +23,30 @@ Ext.define('GiniJS.controller.TopologyController', {
 		this.firewalls = 0;
 		this.wireless = 0;
 		this.mobiles = 0;
+		
 	},
 	
 	onInsertNode : function(ddSource, e, data, canvas){
 		console.log("Inserting node ... ", ddSource, e, data, canvas);
 
+		if (!this.canvas){
+			this.canvas = canvas;
+		}
+		
 		var store = Ext.data.StoreManager.lookup('GiniJS.store.TopologyStore'),
 			 comps = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore'),
-			 mdl = comps.findRecord('type', data.componentData.type);
+			 mdl = comps.findRecord('type', data.componentData.type);			
 		
+		var x = e.getX() - canvas.getEl().getX(),
+			 y = e.getY() - canvas.getEl().getY(),
+			 id = Ext.id();
+				
 		var node = Ext.create('GiniJS.model.TopologyNode', {
 			node: mdl,
 			properties: {},
 			interfaces: [],
 			connections: []
-		});			
-		
-		var x = e.getX() - canvas.getEl().getX(),
-			 y = e.getY() - canvas.getEl().getY(),
-			 id = Ext.id();
+		});		
 		
 		canvas.surface.add({
 			type: 'image',
@@ -56,7 +61,8 @@ Ext.define('GiniJS.controller.TopologyController', {
 				constrainTo: canvas.getEl()
         },
         listeners : {
-	        'click' : this.handleNodeClick
+	        'click' : this.handleNodeClick,
+	        scope: this
 	     },
 	     model : node
 		}).show(true);	 		 
@@ -165,6 +171,21 @@ Ext.define('GiniJS.controller.TopologyController', {
 	},
 	
 	handleNodeClick : function(node, e, eOpts){
+		// handle connections 
+		if (e.ctrlKey === true){
+			if (!this.dragStart){
+				this.dragStart = node;
+			} else if (node != this.dragStart){
+				this.onInsertConnection(this.dragStart, node);
+				this.dragStart = undefined;
+			} else {
+				// deselect connection 
+				this.dragStart = undefined;
+			}
+			return false;
+		}
+		
+		// fill the properties view
 		var mdl = node.model
 		var store = Ext.data.StoreManager.lookup('GiniJS.store.PropertyStore');
 		store.remove(store.getRange());
@@ -176,5 +197,28 @@ Ext.define('GiniJS.controller.TopologyController', {
 			}); 
 		}
 		store.loadData(props);
+	},
+	
+	onDrawConnection : function(start, end){
+		var p = new Ext.XTemplate('M {startx},{starty} L {endx},{endy}').apply({
+			startx: start.x + start.width/2,
+			starty: start.y + start.height/2,
+			endx: end.x + end.width/2,
+			endy: end.y + end.height/2
+		});
+		console.log(p);
+		this.canvas.surface.add({
+			type: 'path',
+			path: p,
+			'stroke-width' : 2,
+			'stroke' : '#000000'
+		}).show(true);
+	},
+	
+	onInsertConnection : function(start, end){
+		console.log("got a connection!!!");
+		console.log(start, end);
+		this.onDrawConnection(start, end); 
 	}
+	
 });
