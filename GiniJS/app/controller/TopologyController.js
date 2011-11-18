@@ -59,11 +59,14 @@ Ext.define('GiniJS.controller.TopologyController', {
 			id: id,
 			width: data.componentData.width,
 			height: data.componentData.height,
-			src: data.componentData.icon,
-			draggable: {
+			src: data.componentData.icon
+		
+			//TODO : Handle making components draggable ... 
+			
+			/*draggable: {
 				constrain: true,
 				constrainTo: canvas.getEl()
-        },
+        }*/,
         listeners : {
 	        'click' : this.onNodeClick,
 	        scope : this
@@ -172,11 +175,30 @@ Ext.define('GiniJS.controller.TopologyController', {
 			console.log("control was pressed...");
 			if (!this.dragStart){
 				this.dragStart = node;
-				console.log("setting start to", this.dragStart);
+				
+				// draw selection box 
+				node.selectionBox = Ext.create('Ext.draw.Sprite', {
+					type: 'path',
+					path: new Ext.XTemplate('M {lx} {ty} L {rx} {ty} M {rx} {ty} L {rx} {by} M {rx} {by} L {lx} {by} M {lx} {by} L {lx} {ty}').apply({
+						lx: node.x,
+						rx: node.x + node.width,
+						ty: node.y,
+						by: node.y + node.height
+					}),
+					'stroke-width' : 1,
+					'stroke': "#CDCDCD"
+				});				
+				
+				this.canvas.surface.add(node.selectionBox).show(true);				
+				
 			} else if (node != this.dragStart){
+			
+				// remove other selection box
+				this.dragStart.selectionBox.destroy();
 				this.onInsertConnection(this.dragStart, node);
 				this.dragStart = undefined;
 			} else {
+				this.dragStart.selectionBox.destroy();
 				// deselect connection 
 				this.dragStart = undefined;
 			}
@@ -289,23 +311,27 @@ Ext.define('GiniJS.controller.TopologyController', {
 		
 		if (success === true){
 
-			sm.connections().loadRecords([em], {
-				addRecords: true
-			});
-			em.connections().loadRecords([sm], {
-				addRecords: true
-			});
-			
-			// add an extra interface for the router ... 
-			if (startType === "Router"){
-				sm.interfaces().loadRawData([{
-					id: Ext.id(),
-					tid: sm.get('id')
-				}], true);
-			}		
-			
-			this.onDrawConnection(start, end);
-			this.onRefreshInterfaces();
+			if (sm.connections().indexOf(em) === -1 && em.connections().indexOf(sm) === -1){
+				sm.connections().loadRecords([em], {
+					addRecords: true
+				});
+				em.connections().loadRecords([sm], {
+					addRecords: true
+				});
+				
+				// add an extra interface for the router ... 
+				if (startType === "Router"){
+					sm.interfaces().loadRawData([{
+						id: Ext.id(),
+						tid: sm.get('id')
+					}], true);
+				}
+				
+				// TODO: the symmetric situation 	
+				
+				this.onDrawConnection(start, end);
+				this.onRefreshInterfaces();
+			}
 			
 		} else {
 			Ext.Msg.alert("Error", errorMsg || ("Cannot connect " + startType + " and " + endType));
