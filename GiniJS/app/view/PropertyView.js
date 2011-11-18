@@ -1,6 +1,6 @@
 Ext.define('GiniJS.view.PropertyView', {
 	constructor : function(config){
-		this.emptyStore = Ext.create('Ext.data.Store', {
+		this.emptyStore = new Ext.data.Store({
 			requires: 'GiniJS.model.Property',
 			model: 'GiniJS.model.Property'
 		});

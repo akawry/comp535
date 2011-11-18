@@ -1,14 +1,3 @@
-Ext.require([
-	'Ext.container.Viewport',
-	'GiniJS.view.Menu',
-	'GiniJS.view.TaskView',
-	'GiniJS.view.PropertyView',
-	'GiniJS.view.LogView',
-	'GiniJS.view.ComponentView',
-	'GiniJS.view.Console',
-	'GiniJS.view.CanvasView'
-]);
-
 Ext.define('GiniJS.view.AppView', {
 	constructor : function(config){
 		this.taskManager = Ext.create('GiniJS.view.TaskView', {
