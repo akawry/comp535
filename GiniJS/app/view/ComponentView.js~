@@ -15,6 +15,7 @@ Ext.define('GiniJS.view.ComponentView', {
 	listeners : {
 		afterrender : function(){
 			var store = Ext.data.StoreManager.lookup('GiniJS.store.ComponentStore');
+			console.log(store);
 			store.clearFilter();
 			store.filter(function(rec){
 				return rec.get('common') === true;

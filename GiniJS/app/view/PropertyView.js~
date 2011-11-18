@@ -6,7 +6,6 @@ Ext.define('GiniJS.view.PropertyView', {
 		});
 		GiniJS.view.PropertyView.superclass.constructor.call(this, config);
 	},
-	alias: 'widget.propertyview',
 	extend: 'Ext.grid.Panel',
 	store: this.emptyStore,
 	columns: [{

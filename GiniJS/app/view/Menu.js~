@@ -1,3 +1,8 @@
+Ext.require([
+	'Ext.toolbar.Toolbar',
+	'Ext.menu.Menu'
+]);
+
 Ext.define('GiniJS.view.Menu', {
 	extend: 'Ext.toolbar.Toolbar',
 	items: [{

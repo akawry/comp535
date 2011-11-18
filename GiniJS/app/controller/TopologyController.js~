@@ -292,7 +292,7 @@ Ext.define('GiniJS.controller.TopologyController', {
 					}
 				} else if (endType === "UML"){
 					if (sm.connections().getCount() > 2){
-						errorMsg = "Subnet cannot have more than two connections!";
+						errorMsg = "Subnet cannot have more than two connections!");
 					} else {
 						success = true;
 					}
