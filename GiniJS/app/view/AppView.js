@@ -5,16 +5,6 @@ Ext.define('GiniJS.view.AppView', {
 			minWidth: 100,
 			width: 300,
 		});			
-		this.taskManager.show();
-		
-		this.sampleConsole = Ext.create('GiniJS.view.Console', {
-			title: 'Sample Console',
-			minWidth: 300,
-			minHeight: 300,
-			width: 300,
-			height: 300
-		});
-		this.sampleConsole.show();				
 		
 		GiniJS.view.AppView.superclass.constructor.call(this, config);
 	},

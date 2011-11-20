@@ -2,7 +2,8 @@ Ext.define('GiniJS.view.PropertyView', {
 	constructor : function(config){
 		this.emptyStore = new Ext.data.Store({
 			requires: 'GiniJS.model.Property',
-			model: 'GiniJS.model.Property'
+			model: 'GiniJS.model.Property',
+			storeId: 'GiniJS.store.EmptyProperties'
 		});
 		GiniJS.view.PropertyView.superclass.constructor.call(this, config);
 	},

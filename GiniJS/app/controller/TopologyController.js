@@ -15,10 +15,64 @@ Ext.define('GiniJS.controller.TopologyController', {
 		console.log("Initializing topology ... ");
 		this.control ({
 			'canvasview' : {
-				'insertnode' : this.onInsertNode			
+				'insertnode' : this.onInsertNode,
+				'rightclick' : this.onNodeRightClick,			
 			}, 
 			'interfaceview > toolbar > button' : {
 				'click' : this.onInterfaceChange
+			}
+		});
+		
+		this.rightClickMenus = {};
+		this.rightClickMenus["UML"] = Ext.create('Ext.menu.Menu', {
+			items: [{
+				text: 'Delete'
+			}, {
+				text: 'Restart'
+			}, {
+				text: 'Stop'
+			}],
+			listeners: {
+				'click' : this.onUMLRightClick,
+				scope : this
+			}
+		});
+		
+		this.rightClickMenus["Subnet"] = Ext.create('Ext.menu.Menu', {
+			items: [{
+				text: 'Delete'
+			}],
+			listeners: {
+				'click' : this.onSubnetRightClick,
+				scope : this
+			}
+		});
+		
+		this.rightClickMenus["Router"] = Ext.create('Ext.menu.Menu', {
+			items: [{
+				text: 'Delete'
+			}, {
+				text: 'Restart'
+			}, {
+				text: 'Stop'
+			}, {
+				text: 'Wireshark'
+			}, {
+				text: 'Graph'
+			}],
+			listeners: {
+				'click' : this.onRouterRightClick,
+				scope : this
+			}
+		});
+		
+		this.rightClickMenus["Switch"] = Ext.create('Ext.menu.Menu', {
+			items: [{
+				text: 'Delete'
+			}],
+			listeners: {
+				'click' : this.onSwitchRightClick,
+				scope : this
 			}
 		});
 		
@@ -40,14 +94,15 @@ Ext.define('GiniJS.controller.TopologyController', {
 			 id = Ext.id();
 				
 		var node = Ext.create('GiniJS.model.TopologyNode', {
-			node: mdl
+			node: mdl,
+			connection_sprites: []
 		});
 		
 		node.properties().filterOnLoad = false;			
 		node.connections().filterOnLoad = false;
 		node.interfaces().filterOnLoad = false;
 	
-		canvas.surface.add({
+		var sprite = Ext.create('Ext.draw.Sprite', {
 			type: 'image',
 			x: x,
 			y: y,
@@ -67,7 +122,9 @@ Ext.define('GiniJS.controller.TopologyController', {
 	        scope : this
 	     },
 	     model : node
-		}).show(true);	 		 
+		});
+		node.set('sprite', sprite);
+		canvas.surface.add(sprite).show(true);	 		 
 			 
 		switch (	data.componentData.type ){
 			case "Router":
@@ -117,6 +174,8 @@ Ext.define('GiniJS.controller.TopologyController', {
 	onInsertUML : function(data){
 		console.log("Inserting UML ... ", data);
 		data.setProperty('name', 'UML_' + (getNodeByType("UML").length + 1));
+		
+		// Are these dynamically allocated ?
 		data.setProperty('filesystem', 'root_fs_beta2');
 		data.setProperty('filetype', 'cow');
 	},
@@ -124,6 +183,7 @@ Ext.define('GiniJS.controller.TopologyController', {
 	onInsertSwitch : function(data){
 		console.log("Inserting Switch ... ", data);
 		data.setProperty('name', 'Switch_' + (getNodeByType("Switch").length + 1));
+		data.setProperty('Hub mode', false); 
 	},
 	
 	onInsertSubnet : function(data){
@@ -191,13 +251,132 @@ Ext.define('GiniJS.controller.TopologyController', {
 			}
 			return false;
 		}
-		
-		// fill the properties view
-		Ext.ComponentQuery.query('propertyview')[0].reconfigure(node.model.properties());
-		var store = Ext.isEmpty(node.model.get('iface')) ? Ext.data.StoreManager.lookup('GiniJS.store.EmptyInterfaces') : node.model.get('iface').properties();
-		Ext.ComponentQuery.query('interfaceview')[0].reconfigure(store);
-		
 		this.selected = node.model;
+		this.refreshViews();
+	},
+	
+	// TODO: put this logic in the View Controller .... 
+	refreshViews : function(){
+		var store = Ext.isEmpty(this.selected) ? Ext.data.StoreManager.lookup('GiniJS.store.EmptyProperties') : this.selected.properties();
+		Ext.ComponentQuery.query('propertyview')[0].reconfigure(store);
+		store = (Ext.isEmpty(this.selected) || Ext.isEmpty(this.selected.get('iface'))) ? Ext.data.StoreManager.lookup('GiniJS.store.EmptyInterfaces') : this.selected.get('iface').properties();
+		Ext.ComponentQuery.query('interfaceview')[0].reconfigure(store);
+	},
+	
+	
+	onNodeRightClick : function(e){
+		var sprite, x, y, me = this;
+			 store = Ext.data.StoreManager.lookup('GiniJS.store.TopologyStore');
+		store.each(function(rec){
+			sprite = rec.get('sprite');
+			x = e.getX() - me.canvas.getEl().getX();
+			y = e.getY() - me.canvas.getEl().getY();
+			if (x >= sprite.x && x <= sprite.x + sprite.width &&
+					y >= sprite.y && y <= sprite.y + sprite.height){
+					
+					me.rightClicked = sprite.model;
+					me.rightClickMenus[sprite.model.get('node').get('type')].showAt([e.getX(), e.getY()]);
+					
+			}
+		});
+	},
+	
+	onUMLRightClick : function(menu, item, e, eOpts){
+		console.log("Selected something from the UML right click menu...", menu, item, e, eOpts);
+		switch (item.text){
+			case "Delete":
+				this.onNodeDelete(this.rightClicked);
+				break;
+		}
+	},
+	
+	onRouterRightClick : function(menu, item, e, eOpts){
+		console.log("Selected something from the Router right click menu...", menu, item, e, eOpts);
+		switch (item.text){
+			case "Delete":
+				this.onNodeDelete(this.rightClicked);
+				break;
+		}
+	},
+	
+	onSubnetRightClick : function(menu, item, e, eOpts){
+		console.log("Selected something from the Subnet right click menu...", menu, item, e, eOpts);
+		switch (item.text){
+			case "Delete":
+				this.onNodeDelete(this.rightClicked);
+				break;
+		}
+	},
+	
+	onSwitchRightClick : function(menu, item, e, eOpts){
+		console.log("Selected something from the Switch right click menu...", menu, item, e, eOpts);
+		switch (item.text){
+			case "Delete":
+				this.onNodeDelete(this.rightClicked);
+				break;
+		}
+	},
+	
+	onNodeDelete : function(node){
+		console.log("Deleting", node);
+		
+		// delete the sprite 
+		node.get('sprite').destroy();
+		
+		// delete all the lines out of this node 
+		Ext.each(node.get('connection_sprites'), function(sprite){
+			node.connections().each(function(con){
+				var sprites = con.get('connection_sprites');
+				sprites.splice(sprites.indexOf(sprite), 1);
+			});
+			sprite.destroy();		
+		});
+		
+		// remove any interfaces pointing to the deleted node 
+		var store = Ext.data.StoreManager.lookup('GiniJS.store.TopologyStore');
+		var me = this;
+		if (node.get('node').get('type') !== "Subnet"){
+			store.each(function(con){
+				var iface = con.interface(node.property('name'));
+				if (!Ext.isEmpty(iface)){
+					con.interfaces().remove(iface);
+					if (con.get('iface') === iface){
+						con.set('iface', con.interfaces().first());
+						if (me.selected === con){
+							Ext.ComponentQuery.query('interfaceview')[0].reconfigure(con.get('iface').properties());
+						}
+					}
+				}
+			});
+		// subnet acts as a bridge between two components,
+		// and subnet is being deleted 
+		} else {
+			if (node.connections().getCount() === 2){
+				var a = node.connections().first(), b = node.connections().last();
+				var iface = a.interface(b.property('name'));
+				a.interfaces().remove(iface);
+				if (a.get('iface') === iface){
+					a.set('iface', a.interfaces().first());
+				}
+				
+				iface = b.interface(a.property('name'));
+				b.interfaces().remove(iface);
+				if (b.get('iface') === iface){
+					b.set('iface', b.interfaces().first());
+				}	
+				
+				me.refreshViews();
+			}	
+		}		
+		
+		// remove connections from other nodes
+		Ext.each(node.get('connections'), function(con){
+			var cons = con.get('connections');
+			cons.splice(cons.indexOf(node), 1);
+		});
+		
+		// remove from the store of nodes 
+		store.remove(node);		
 	},
 	
 	onDrawConnection : function(start, end){
@@ -207,12 +386,17 @@ Ext.define('GiniJS.controller.TopologyController', {
 			endx: end.x + end.width/2,
 			endy: end.y + end.height/2
 		});
-		this.canvas.surface.add({
+		var sprite = Ext.create('Ext.draw.Sprite', {
 			type: 'path',
 			path: p,
 			'stroke-width' : 2,
 			'stroke' : '#000000'
-		}).show(true);
+		});
+		
+		start.model.get('connection_sprites').push(sprite);
+		end.model.get('connection_sprites').push(sprite);
+		
+		this.canvas.surface.add(sprite).show(true);
 	},
 
 	

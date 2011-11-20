@@ -15,6 +15,13 @@ Ext.define('GiniJS.view.CanvasView', {
 						return true;
 					}
 				});
+				
+				this.getEl().on({
+					'contextmenu' : function(e){
+						e.preventDefault();
+						me.fireEvent('rightclick', e);	
+					}
+				});
 			}
 		}
 	}

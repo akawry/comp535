@@ -1,13 +1,19 @@
 Ext.define('GiniJS.model.TopologyNode', {
 	requires: ['GiniJS.model.Interface', 'GiniJS.model.Property'],
 	extend: 'Ext.data.Model',
+	
 	fields: [{
 		name: 'id'
 	}, {
 		name: 'node'
 	}, {
 		name: 'iface'
+	}, {
+		name: 'sprite'
+	}, {
+		name: 'connection_sprites'
 	}],
+	
 	hasMany: [{
 		model: 'GiniJS.model.TopologyNode', name: 'connections'
 	}, {
@@ -50,11 +56,11 @@ Ext.define('GiniJS.model.TopologyNode', {
 		});
 		return iface;
 	},
-	hasInterface : function(target){
-		var found = false;
+	interface : function(target){
+		var found;
 		this.interfaces().each(function(rec){
 			if (rec.property('target') === target)
-				found = true;
+				found = rec;
 		});
 		return found;
 	}
