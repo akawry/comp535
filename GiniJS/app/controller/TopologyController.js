@@ -219,7 +219,6 @@ Ext.define('GiniJS.controller.TopologyController', {
 	onNodeClick : function(node, e, eOpts){
 		// handle connections 
 		if (e.ctrlKey === true){
-			console.log("control was pressed...");
 			if (!this.dragStart){
 				this.dragStart = node;
 				
@@ -519,7 +518,16 @@ Ext.define('GiniJS.controller.TopologyController', {
 								other.set('iface', other_iface);
 							}
 						}
+					} else if (startType === "Switch"){
+						if (endType === "UML"){
+							iface.setProperty('target', em.property('name'));
+						} else if (endType === "Subnet"){
+							if (em.connections().getCount() > 1){
+								iface.setProperty('target', em.otherConnection(sm).property('name'));
+							}
+						}
 					}
+								
 					
 					// TODO: These are allocated dynamically
 					iface.setProperty('mac', '');
@@ -567,7 +575,18 @@ Ext.define('GiniJS.controller.TopologyController', {
 						em.set('iface', iface);
 						console.log("Setting " + em.property('name')+"'s interface target as "+iface.property('target'));
 					}				
-				} 	
+				} 
+				
+				if (endType === "Switch" && startType === "Subnet"){
+					if (sm.connections().getCount() > 1){
+						var other = sm.otherConnection(em),
+						    other_iface = other.emptyInterface();
+						other_iface.setProperty('target', em.property('name'));
+						if (Ext.isEmpty(other.get('iface')))
+							other.set('iface', other_iface);
+					}
+				}
+						
 				
 				this.onDrawConnection(start, end);
 			}
