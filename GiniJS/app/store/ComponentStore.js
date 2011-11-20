@@ -24,6 +24,6 @@ Ext.create('GiniJS.store.ComponentStore', {
 	}, {
 		type: 'Firewall', icon: 'app/resources/images/Firewall.gif', category: 'net', common: false, id: Ext.id(), width: 38, height: 59
 	}, {
-		type: 'Wireless_access_point', icon: 'app/resources/images/Wireless_access_point.gif', category: 'net', common: false, id: Ext.id(), width: 32, height: 64
+		type: 'Wireless_access_point', icon: 'app/resources/images/Wireless_access_point.gif', category: 'net', common: false, id: Ext.id(), width: 42, height: 64
 	}]	
 });

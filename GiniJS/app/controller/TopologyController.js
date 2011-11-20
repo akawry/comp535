@@ -76,6 +76,16 @@ Ext.define('GiniJS.controller.TopologyController', {
 			}
 		});
 		
+		this.rightClickMenus["Default"] = Ext.create('Ext.menu.Menu', {
+			items: [{
+				text: 'Delete'
+			}],
+			listeners : {
+				'click' : this.onDefaultRightClick,
+				scope : this
+			}
+		});
+		
 	},
 	
 	onInsertNode : function(ddSource, e, data, canvas){
@@ -274,7 +284,8 @@ Ext.define('GiniJS.controller.TopologyController', {
 					y >= sprite.y && y <= sprite.y + sprite.height){
 					
 					me.rightClicked = sprite.model;
-					me.rightClickMenus[sprite.model.get('node').get('type')].showAt([e.getX(), e.getY()]);
+					var menu = me.rightClickMenus[sprite.model.get('node').get('type')] || me.rightClickMenus["Default"];
+					menu.showAt([e.getX(), e.getY()]);
 					
 			}
 		});
@@ -313,6 +324,16 @@ Ext.define('GiniJS.controller.TopologyController', {
 			case "Delete":
 				this.onNodeDelete(this.rightClicked);
 				break;
+		}
+	},
+	
+	onDefaultRightClick : function(menu, item, e, eOpts){
+		console.log("Selecting something from an item whose logic has not been implemented yet ....", menu, item, e, eOpts);
+		switch (item.text){
+			case "Delete":
+				this.onNodeDelete(this.rightClicked);
+				break;
+			
 		}
 	},
 	
