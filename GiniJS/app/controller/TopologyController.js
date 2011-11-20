@@ -46,11 +46,6 @@ Ext.define('GiniJS.controller.TopologyController', {
 		node.properties().filterOnLoad = false;			
 		node.connections().filterOnLoad = false;
 		node.interfaces().filterOnLoad = false;
-		node.interfaces().on('load', function(s, recs){
-			Ext.each(recs, function(r){
-				r.properties().filterOnLoad = false;
-			});
-		});	
 	
 		canvas.surface.add({
 			type: 'image',
@@ -117,21 +112,13 @@ Ext.define('GiniJS.controller.TopologyController', {
 	onInsertRouter : function(data){
 		console.log("Inserting router ... ", data);
 		data.setProperty('name', 'Router_' + (getNodeByType("Router").length + 1));
-		data.interfaces().loadRawData([{
-			id: Ext.id(),
-			tid: data.get('id')
-		}], true);
-		data.set('iface', data.interfaces().first());
 	},
 	
 	onInsertUML : function(data){
 		console.log("Inserting UML ... ", data);
 		data.setProperty('name', 'UML_' + (getNodeByType("UML").length + 1));
-		data.interfaces().loadRawData([{
-			id: Ext.id(),
-			tid: data.get('id')
-		}], true);
-		data.set('iface', data.interfaces().first());
+		data.setProperty('filesystem', 'root_fs_beta2');
+		data.setProperty('filetype', 'cow');
 	},
 	
 	onInsertSwitch : function(data){
@@ -209,6 +196,8 @@ Ext.define('GiniJS.controller.TopologyController', {
 		Ext.ComponentQuery.query('propertyview')[0].reconfigure(node.model.properties());
 		var store = Ext.isEmpty(node.model.get('iface')) ? Ext.data.StoreManager.lookup('GiniJS.store.EmptyInterfaces') : node.model.get('iface').properties();
 		Ext.ComponentQuery.query('interfaceview')[0].reconfigure(store);
+		
+		this.selected = node.model;
 	},
 	
 	onDrawConnection : function(start, end){
@@ -319,18 +308,84 @@ Ext.define('GiniJS.controller.TopologyController', {
 					addRecords: true
 				});
 				
-				// add an extra interface for the router ... 
-				if (startType === "Router"){
-					sm.interfaces().loadRawData([{
+				if (startType === "UML" || startType === "Router"){
+					console.log("Adding interface to " + sm.property("name"), sm.interfaces().getCount());
+					var iface = Ext.create('GiniJS.model.Interface', {
 						id: Ext.id(),
 						tid: sm.get('id')
-					}], true);
+					});
+					iface.properties().filterOnLoad = false;
+					
+					if (startType === "UML"){
+						if (endType === "Switch"){
+							iface.setProperty('target', em.property('name'));
+						} else if (endType === "Subnet"){
+							// find other side of connection
+							if (em.connections().getCount() > 1){
+								iface.setProperty('target', em.otherConnection(sm).property('name'));
+							}
+						}
+					} else if (startType === "Router"){
+						if (em.connections().getCount() > 1){
+							var other = em.otherConnection(sm);
+							iface.setProperty('target', other.property('name'));
+							if (other.get('node').get('type') === "UML" || other.get('node').get('type') === "Router"){
+								var other_iface = other.emptyInterface();
+								other_iface.setProperty('target', sm.property('name'));
+								other.set('iface', other_iface);
+							}
+						}
+					}
+					
+					// TODO: These are allocated dynamically
+					iface.setProperty('mac', '');
+					iface.setProperty('ipv4', '');
+					
+					sm.interfaces().loadRecords([iface], {
+						addRecords : true
+					});
+					if (!Ext.isEmpty(iface.property('target'))){
+						sm.set('iface', iface);
+						console.log("Setting " + sm.property('name')+"'s interface target as "+iface.property('target'));
+					}					
 				}
 				
-				// TODO: the symmetric situation 	
+				if (endType === "Router" || endType === "UML"){
+					console.log("Adding interface to "+em.property("name"), em.interfaces().getCount());
+					var iface = Ext.create('GiniJS.model.Interface', {
+						id: Ext.id(),
+						tid: sm.get('id')
+					});
+					iface.properties().filterOnLoad = false;
+					if (startType === "Subnet"){
+						if (sm.connections().getCount() > 1){
+							var other = sm.otherConnection(em);
+							iface.setProperty('target', other.property('name'));
+							if (other.get('node').get('type') === "UML" || other.get('node').get('type') === "Router"){
+								var other_iface = other.emptyInterface();
+								other_iface.setProperty('target', em.property('name'));
+								other.set('iface', other_iface);
+							}
+						}
+					} else if (endType === "UML"){
+						iface.setProperty('target', sm.property('name'));
+					}
+					
+					// TODO: These are allocated dynamically
+					iface.setProperty('mac', '');
+					iface.setProperty('ipv4', '');
+					
+					em.interfaces().loadRecords([iface], {
+						addRecords: true
+					});
+					
+					if (!Ext.isEmpty(iface.property('target'))){
+						em.set('iface', iface);
+						console.log("Setting " + em.property('name')+"'s interface target as "+iface.property('target'));
+					}				
+				} 	
 				
 				this.onDrawConnection(start, end);
-				this.onRefreshInterfaces();
 			}
 			
 		} else {
@@ -339,64 +394,20 @@ Ext.define('GiniJS.controller.TopologyController', {
 			 
 	},
 	
-	onRefreshInterfaces : function(){
-		var store = Ext.data.StoreManager.lookup('GiniJS.store.TopologyStore'),
-			 Q = [],
-			 u, stype, etype,
-			 marked = {};
-			 	 
-		// BFS this hoe!!
-		Q.push(store.first());
-		
-		while (Q.length > 0){
-			u = Q.splice(0, 1)[0];
-			marked[u.property('name')] = true;
-			u.connections().each(function(v){
-				stype = u.get('node').get('type');
-				etype = v.get('node').get('type');
-				console.log("considering pair...", stype, etype);
-				switch (stype){
-					case "UML":
-						if (etype === "Switch"){
-							u.interfaces().first().setProperty('target', v.property('name'));
-						}
-						
-						else if (etype === "Subnet"){
-							if (v.connections().getCount() > 1){
-								var other = v.connectionsWith("Router")[0] || v.connectionsWith("Switch")[0];
-								u.interfaces().first().setProperty('target', other.property('name'));
-							}
-						}
-						
-						break;
-					
-					case "Router":
-						// must be subnet ... 
-						if (v.connections().getCount() > 1){
-							var other = v.connectionsWith("UML")[0] || v.connectionsWith("Switch")[0],
-								 idx = u.connections().indexOf(v);
-							u.interfaces().getAt(idx).setProperty('target', other.property('name'));
-							console.log("Setting new interface target from " + u.property("name") + " to " + other.property('name'));
-						}
-						
-						break;
-				}
-				
-				if (marked[v.property('name')] !== true){
-					Q.push(v);
-				}
-			});	
-		}
-	},
-	
 	onInterfaceChange : function(btn){
+		var idx = this.selected.interfaces().indexOf(this.selected.get('iface'));
 		if (btn.text === "<"){
-			// go to previous interface
+			if (idx > 0){
+				this.selected.set('iface', this.selected.interfaces().getAt(idx - 1));
+				Ext.ComponentQuery.query('interfaceview')[0].reconfigure(this.selected.get('iface').properties());
+			}			
 		} else if (btn.text === ">"){
-			// go to next interface
+			if (idx < this.selected.interfaces().getCount() - 1){
+				this.selected.set('iface', this.selected.interfaces().getAt(idx + 1));
+				Ext.ComponentQuery.query('interfaceview')[0].reconfigure(this.selected.get('iface').properties());
+			}
 		}
-		
-		// use store.indexOf(model) ... 
+		 
 	}
 	
 });
